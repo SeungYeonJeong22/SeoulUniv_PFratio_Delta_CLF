@@ -1,0 +1,14 @@
+{
+    "data_root_path": "sample_data/",
+    "csv_path": "sample_data/sample.csv",
+    "pretrained_model_path": "models/pretrained_model.pth",
+    "save_model_root_path": "save",
+    "log_root_path": "logs",
+    "model":{
+        "type": "ResNet50",
+        "input_size": 224,
+        "num_classes": 10,
+        "dropout_rate": 0.5
+    }
+
+}
