@@ -13,7 +13,7 @@ def get_transform(cfg=None):
     # resize, to tensor, normalize
     transform = T.Compose([
         T.ToPILImage(),
-        T.Resize((cfg.transform.image_size, cfg.transform.image_size)),
+        T.Resize((cfg.transform["image_size"], cfg.transform["image_size"])),
         T.ToTensor(),
         T.Normalize(mean=[0.5], std=[0.5])
     ])

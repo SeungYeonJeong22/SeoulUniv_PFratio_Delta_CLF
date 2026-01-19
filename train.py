@@ -24,8 +24,9 @@ def train(args, cfg, dataloader, model, optimizer, criterion, device="cpu"):
             x1, x2, target = x1.to(device), x2.to(device), target.to(device)
             
             optimizer.zero_grad()
-            output = model(x1, x2)
-            loss = criterion(output, target)
+            logits = model(x1, x2).squeeze(1)
+            
+            loss = criterion(logits, target)
             loss.backward()
             optimizer.step()
             
@@ -47,22 +48,24 @@ def train(args, cfg, dataloader, model, optimizer, criterion, device="cpu"):
             for (x1, x2), target in tqdm(dataloader['val'], desc=f"Epoch {epoch+1}/{num_epochs} Validation"):
                 x1, x2, target = x1.to(device), x2.to(device), target.to(device)
 
-                output = model(x1, x2)
-                val_loss = criterion(output, target)
+                logits = model(x1, x2).squeeze(1)
+                val_loss = criterion(logits, target)
                 
                 bs = target.size(0)
                 val_loss_sum += val_loss.item() * bs
                 val_count += bs
+                
+                probs = torch.sigmoid(logits)
 
-                all_outputs.append(output.detach())
-                all_targets.append(target.detach())                
+                all_outputs.append(probs)
+                all_targets.append(target)
                 
         val_loss = val_loss_sum / max(val_count, 1)
 
         all_outputs = torch.cat(all_outputs, dim=0)
         all_targets = torch.cat(all_targets, dim=0)
 
-        roc_auc, accuracy, f1, sensitivity, specificity = evaluate_model(all_outputs, all_targets, device=device)
+        roc_auc, accuracy, f1, sensitivity, specificity = evaluate_model(all_outputs, all_targets)
 
         print(f"Validation Loss: {val_loss:.4f}")
         print(f"ROC AUC: {roc_auc:.4f}, Accuracy: {accuracy:.4f}, F1: {f1:.4f}, "
@@ -75,7 +78,7 @@ def train(args, cfg, dataloader, model, optimizer, criterion, device="cpu"):
             torch.save(model.state_dict(), save_path)
             print("Best model saved.")
 
-        # Logging
-        log_path = log_root_path, f"{now}_log.txt"
-        with open(log_path, "a") as f:
-            f.write(f"{now} | Epoch {epoch+1}/{num_epochs}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}\n")
+        # # Logging
+        # log_path = log_root_path, f"{now}_log.txt"
+        # with open(log_path, "a") as f:
+        #     f.write(f"{now} | Epoch {epoch+1}/{num_epochs}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}\n")

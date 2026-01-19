@@ -46,7 +46,7 @@ def main():
     }
     
     # Model Settings
-    model = DownStreamTaskModel(enc_dims=512, output_dim=2)
+    model = DownStreamTaskModel(enc_dims=512, output_dim=1)
     if torch.backends.mps.is_available():
         device = torch.device("mps")
     elif torch.cuda.is_available():
