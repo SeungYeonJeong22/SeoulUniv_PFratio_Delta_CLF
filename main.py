@@ -27,7 +27,7 @@ def main():
     
     cfg = load_cfg(args.cfg_path)
     
-    transform = get_transform()
+    transform = get_transform(cfg)
     
     # Data Settings
     full_dataset = PFRatioDataset(cfg=cfg, transform=transform)

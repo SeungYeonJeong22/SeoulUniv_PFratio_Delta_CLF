@@ -25,10 +25,10 @@ class PFRatioDataset(Dataset):
         x2 = self._read_gray_pil(row["CXR PATH2"])
 
         y = int(row["SIMPLE LABEL"])
-        y = torch.tensor(y, dtype=torch.long)  # CrossEntropyLoss 기준
+        y = torch.tensor(y, dtype=torch.long)  
 
         if self.transform is not None:
-            x1 = self.transform(x1)  # ✅ torchvision는 이렇게
+            x1 = self.transform(x1)  
             x2 = self.transform(x2)
 
         return (x1, x2), y

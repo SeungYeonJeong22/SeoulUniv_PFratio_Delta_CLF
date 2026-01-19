@@ -4,6 +4,9 @@
     "pretrained_model_path": "models/pretrained_model.pth",
     "save_model_root_path": "save",
     "log_root_path": "logs",
+    "transform":{
+        "image_size": 224
+    },
     "model":{
         "type": "ResNet50",
         "input_size": 224,
