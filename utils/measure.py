@@ -1,4 +1,5 @@
 from sklearn.metrics import roc_auc_score, accuracy_score, f1_score, confusion_matrix
+# from torchmetrics.classification import BinarySpecificityAtSensitivity
 import torch
 
 
@@ -13,7 +14,7 @@ def evaluate_model(probs, targets, threshold=0.5):
     accuracy = accuracy_score(targets, preds)
     f1 = f1_score(targets, preds)
     
-    cm = confusion_matrix(targets, preds, labels=[0, 2])
+    cm = confusion_matrix(targets, preds, labels=[0, 1])
     tn, fp, fn, tp = cm.ravel()
     
     sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0

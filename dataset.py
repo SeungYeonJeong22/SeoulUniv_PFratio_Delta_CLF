@@ -3,26 +3,28 @@ from torch.utils.data import Dataset
 import torch
 import pandas as pd
 import cv2
+import os
 
 class PFRatioDataset(Dataset):
     def __init__(self, cfg, flag="train", transform=None):
-        self.patient_info = pd.read_csv(cfg.csv_path)
-        rename_df = pd.read_excel(cfg.renamed_excel_path)  # 필요시 엑셀 파일도 읽기
+        df_path = os.path.join(cfg.data_root_path, cfg.csv_file)
+        img_dirs = os.path.join(cfg.data_root_path, cfg.image_dirs)
+        self.df = pd.read_csv(df_path)
         
         # 원본에서는 CXR PATH가 바론 ./data_png인데, 현재 디렉토리 구조간 ./data/data_png, ./data/metadata로 구성돼있어서 필요하면 사용
-        self.patient_info['CXR PATH1'] = self.patient_info['CXR PATH1'].apply(lambda x: x.replace("./data_png", cfg.data_root_path))
-        self.patient_info['CXR PATH2'] = self.patient_info['CXR PATH2'].apply(lambda x: x.replace("./data_png", cfg.data_root_path))
+        self.df['CXR PATH1'] = self.df['CXR PATH1'].apply(lambda x: x.replace("./data_png", img_dirs))
+        self.df['CXR PATH2'] = self.df['CXR PATH2'].apply(lambda x: x.replace("./data_png", img_dirs))
         
-        self.patient_info['SIMPLE LABEL'] = self.patient_info['SIMPLE LABEL'].apply(lambda x: 1 if x == 2 else 0)
+        self.df['SIMPLE LABEL'] = self.df['SIMPLE LABEL'].apply(lambda x: 1 if x == 2 else 0)
         
         
         self.transform = transform
 
     def __len__(self):
-        return len(self.patient_info)
+        return len(self.df)
     
     def __getitem__(self, idx):
-        row = self.patient_info.iloc[idx]
+        row = self.df.iloc[idx]
 
         x1 = cv2.imread(row["CXR PATH1"], cv2.IMREAD_GRAYSCALE)
         x2 = cv2.imread(row["CXR PATH2"], cv2.IMREAD_GRAYSCALE)

@@ -7,8 +7,7 @@ from utils.utils import *
 from utils.transform import *
 
 from torch.utils.data import DataLoader
-from monai.data.utils import list_data_collate
-# 또는 크기가 제각각이면 pad_list_data_collate가 더 안전
+# 크기가 제각각이면 pad_list_data_collate가 더 안전
 from monai.data import pad_list_data_collate
 
 from warnings import filterwarnings
@@ -38,13 +37,13 @@ def main():
     transform = get_transform(cfg)
     
     if args.data_root_path is not None:
-        cfg.data.root_path = args.data_root_path
+        cfg.data_root_path = args.data_root_path
     
     # Data Settings
     full_dataset = PFRatioDataset(cfg=cfg, transform=transform)
     
-    labels = full_dataset.patient_info["SIMPLE LABEL"].to_numpy()
-    pids = full_dataset.patient_info["PID"].values
+    labels = full_dataset.df["SIMPLE LABEL"].to_numpy()
+    pids = full_dataset.df["PID"].values
     train_ds, val_ds, test_ds = split_dataset(full_dataset, labels, pids, random_state=42)
     
     train_loader = DataLoader(
@@ -52,8 +51,7 @@ def main():
         batch_size=cfg.exp_settings.batch_size,
         shuffle=True,
         num_workers=cfg.exp_settings.num_workers,
-        # collate_fn=list_data_collate,          # <-- 추가
-        collate_fn=pad_list_data_collate,     # <-- 크기 다른 샘플 섞일 수 있으면 이걸로
+        collate_fn=pad_list_data_collate,           # 크기 다른 샘플 섞일 수 있으면 이걸로
     )
     
     val_loader = DataLoader(
@@ -61,8 +59,7 @@ def main():
         batch_size=cfg.exp_settings.batch_size,
         shuffle=False,
         num_workers=cfg.exp_settings.num_workers,
-        # collate_fn=list_data_collate,          # <-- 추가
-        collate_fn=pad_list_data_collate,     # <-- 크기 다른 샘플 섞일 수 있으면 이걸로
+        collate_fn=pad_list_data_collate,
     )
     
     test_loader = DataLoader(
@@ -70,8 +67,7 @@ def main():
         batch_size=cfg.exp_settings.batch_size,
         shuffle=False,
         num_workers=cfg.exp_settings.num_workers,
-        # collate_fn=list_data_collate,          # <-- 추가
-        collate_fn=pad_list_data_collate,     # <-- 크기 다른 샘플 섞일 수 있으면 이걸로
+        collate_fn=pad_list_data_collate,
     )    
     
     dataloader = {
@@ -84,6 +80,8 @@ def main():
     model = DownStreamTaskModel(cfg.model)
     device = get_device()
     model.to(device)
+    
+    # Load pretrained weights
     
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg.exp_settings.learning_rate)
     criterion = torch.nn.BCEWithLogitsLoss()

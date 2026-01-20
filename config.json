@@ -1,9 +1,10 @@
 {
     "downstream":{
-        "data_root_path": "./data/data_png/",
-        "csv_path": "./data/paired_ns_train_simple.csv",
+        "data_root_path": "./data",
+        "image_dirs": "data_png",
+        "csv_file": "paired_ns_train_simple.csv",
         "renamed_excel_path": "data/renamed_subjectID_230309.xlsx",
-        "pretrained_model_path": "models/pretrained_model.pth",
+        "pretrained_model_path": "models/CheSS.pth.tar",
         "save_model_root_path": "save",
         "log_root_path": "logs",
 
@@ -27,7 +28,7 @@
             "in_chans":1,
             "d_model":256,
             "nhead":4,
-            "num_layers":6,
+            "num_layers":4,
             "dropout":0.0,
     
             "enc_dims":512,

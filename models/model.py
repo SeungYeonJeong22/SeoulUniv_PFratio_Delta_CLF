@@ -12,7 +12,7 @@ Concat Each Encoders output feature vector
 Pass through Fully Connected Layer
 """
 
-class ImageEncoder(nn.Module):
+class PatchBasedTransformerEncoder(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         
@@ -62,19 +62,15 @@ class ImageEncoder(nn.Module):
     def forward(self, x):
         B, C, H, W = x.shape
 
-        # Patch embedding
         x = self.patch_embed(x)                 # (B, d_model, H/P, W/P)
-        x = x.flatten(2).transpose(1, 2)        # (B, num_patches, d_model)
+        x = x.flatten(2).transpose(1, 2)        # (B, (H/P*W/P), d_model)
 
-        # CLS token 붙이기
         cls = self.cls_token.expand(B, -1, -1)  # (B, 1, d_model)
         x = torch.cat([cls, x], dim=1)          # (B, 1+num_patches, d_model)
 
-        # Positional embedding
         x = x + self.pos_embed[:, : x.size(1), :]
         x = self.pos_drop(x)
 
-        # Transformer
         x = self.encoder(x)                     # (B, 1+num_patches, d_model)
         x = self.norm(x)
 
@@ -89,8 +85,8 @@ class DownStreamTaskModel(nn.Module):
         d_model = cfg.d_model
         output_dim = cfg.output_dim
         
-        self.enc1 = ImageEncoder(cfg)
-        self.enc2 = ImageEncoder(cfg)
+        self.enc1 = PatchBasedTransformerEncoder(cfg)
+        self.enc2 = PatchBasedTransformerEncoder(cfg)
         
         self.fc = nn.Linear(d_model*2, output_dim)
         

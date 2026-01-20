@@ -24,7 +24,8 @@ def train(args, cfg, dataloader, model, optimizer, criterion, device="cpu"):
             x1, x2, target = data["x1"].to(device), data["x2"].to(device), data["y"].to(device)
             
             optimizer.zero_grad()
-            logits = model(x1, x2).squeeze(1)
+            out = model(x1, x2)
+            logits = out.squeeze(1)
             
             loss = criterion(logits, target)
             loss.backward()
@@ -48,7 +49,8 @@ def train(args, cfg, dataloader, model, optimizer, criterion, device="cpu"):
             for data in tqdm(dataloader['val'], desc=f"Epoch {epoch+1}/{num_epochs} Validation"):
                 x1, x2, target = data["x1"].to(device), data["x2"].to(device), data["y"].to(device)
 
-                logits = model(x1, x2).squeeze(1)
+                out = model(x1, x2)
+                logits = out.squeeze(1)
                 val_loss = criterion(logits, target)
                 
                 bs = target.size(0)
@@ -70,6 +72,7 @@ def train(args, cfg, dataloader, model, optimizer, criterion, device="cpu"):
         print(f"Validation Loss: {val_loss:.4f}")
         print(f"ROC AUC: {roc_auc:.4f}, Accuracy: {accuracy:.4f}, F1: {f1:.4f}, "
               f"Sensitivity: {sensitivity:.4f}, Specificity: {specificity:.4f}")
+        print("")
 
         # Save best
         if val_loss < best_val_loss:

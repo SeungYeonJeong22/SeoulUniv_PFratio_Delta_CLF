@@ -56,14 +56,18 @@ def get_device():
     
 
 # split dataset
+"""
+PID를 기준으로 나누되, 각 PID의 slice당 레이블의 분포 차이를 stratified하게 유지하도록 나눔
+"""
 def split_dataset(dataset, labels, pids, random_state=42):
+    
+    
     # 0.8/0.1/0,1 split
     labels = np.array(labels)
     
     unique_pids = np.unique(pids)
     pid_labels = []
     
-
     for pid in unique_pids:
         pid_labels.append(labels[pids == pid][0])
 
