@@ -83,7 +83,13 @@ def main():
     
     # Load pretrained weights
     
-    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.exp_settings.learning_rate)
+    
+    
+    optimizer = torch.optim.Adam(
+        model.parameters(), 
+        lr=cfg.exp_settings.learning_rate,
+        weight_decay=cfg.exp_settings.weight_decay
+    )
     criterion = torch.nn.BCEWithLogitsLoss()
 
     # Train

@@ -11,9 +11,9 @@
         "exp_settings":{
             "batch_size": 16,
             "num_epochs": 100,
-            "learning_rate": 0.0001,
-            "weight_decay": 0.0001,
-            "num_workers": 0
+            "learning_rate": 1e-4,
+            "weight_decay": 1e-4,
+            "num_workers": 4
         },
 
         "transform":{

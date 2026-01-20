@@ -10,7 +10,7 @@ def evaluate_model(probs, targets, threshold=0.5):
     targets = targets.astype(int)
     preds = (probs >= threshold).astype(int)
     
-    roc_auc = roc_auc_score(targets, preds)
+    roc_auc = roc_auc_score(targets, probs)
     accuracy = accuracy_score(targets, preds)
     f1 = f1_score(targets, preds)
     
