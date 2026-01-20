@@ -7,12 +7,17 @@ from utils.utils import *
 from utils.transform import *
 
 from torch.utils.data import DataLoader
+from monai.data.utils import list_data_collate
+# 또는 크기가 제각각이면 pad_list_data_collate가 더 안전
+from monai.data import pad_list_data_collate
+
 from warnings import filterwarnings
 filterwarnings("ignore")
 
 def main():
     parser = ArgumentParser(description="A simple command-line tool.")
     parser.add_argument("--cfg_path", default="./config.json", type=str, help="Data and Model hyperparameter Config JSON File Path.")
+    parser.add_argument("--task", choices=["upstream", "downstream"], default="downstream", help="Task to perform: upstream or downstream.")
     
     # Experiment settings
     parser.add_argument("--batch_size", default=32, type=int, help="Batch size for training.")
@@ -24,8 +29,12 @@ def main():
     
     args = parser.parse_args()
     fix_seed(42)
-    
+
     cfg = load_cfg(args.cfg_path)
+    if args.task == "downstream":
+        cfg = cfg.downstream
+    else:
+        cfg = cfg.upstream
     
     transform = get_transform(cfg)
     
@@ -33,11 +42,35 @@ def main():
     full_dataset = PFRatioDataset(cfg=cfg, transform=transform)
     
     labels = full_dataset.patient_info["SIMPLE LABEL"].to_numpy()
-    train_set, val_set, test_set = split_dataset(full_dataset, labels, random_state=42)
+    pids = full_dataset.patient_info["PID"].values
+    train_ds, val_ds, test_ds = split_dataset(full_dataset, labels, pids, random_state=42)
     
-    train_loader = DataLoader(train_set, batch_size=32, shuffle=True, num_workers=4, pin_memory=True)
-    val_loader   = DataLoader(val_set, batch_size=32, shuffle=False, num_workers=4, pin_memory=True)
-    test_loader  = DataLoader(test_set, batch_size=32, shuffle=False, num_workers=4, pin_memory=True)
+    train_loader = DataLoader(
+        train_ds,
+        batch_size=cfg.exp_settings.batch_size,
+        shuffle=True,
+        num_workers=cfg.exp_settings.num_workers,
+        # collate_fn=list_data_collate,          # <-- 추가
+        collate_fn=pad_list_data_collate,     # <-- 크기 다른 샘플 섞일 수 있으면 이걸로
+    )
+    
+    val_loader = DataLoader(
+        val_ds,
+        batch_size=cfg.exp_settings.batch_size,
+        shuffle=False,
+        num_workers=cfg.exp_settings.num_workers,
+        # collate_fn=list_data_collate,          # <-- 추가
+        collate_fn=pad_list_data_collate,     # <-- 크기 다른 샘플 섞일 수 있으면 이걸로
+    )
+    
+    test_loader = DataLoader(
+        test_ds,
+        batch_size=cfg.exp_settings.batch_size,
+        shuffle=False,
+        num_workers=cfg.exp_settings.num_workers,
+        # collate_fn=list_data_collate,          # <-- 추가
+        collate_fn=pad_list_data_collate,     # <-- 크기 다른 샘플 섞일 수 있으면 이걸로
+    )    
     
     dataloader = {
         "train": train_loader,
@@ -46,7 +79,7 @@ def main():
     }
     
     # Model Settings
-    model = DownStreamTaskModel(enc_dims=512, output_dim=1)
+    model = DownStreamTaskModel(cfg.model)
     if torch.backends.mps.is_available():
         device = torch.device("mps")
     elif torch.cuda.is_available():

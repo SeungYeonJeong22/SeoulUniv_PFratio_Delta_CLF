@@ -7,28 +7,28 @@ input: (paste cxr img, cur cxr img)
 output: improve / deteriorate (Binary Classification)
 
 Baseline Architecture:
-Feed 2 images into Encoder
+Feed 2 images into Encoder which based on patch(ViT) 
 Concat Each Encoders output feature vector
 Pass through Fully Connected Layer
 """
 
 class ImageEncoder(nn.Module):
-    def __init__(
-        self,
-        img_size=224,
-        patch_size=16,
-        in_chans=1,
-        d_model=256,
-        nhead=4,
-        num_layers=6,
-        dropout=0.0,
-    ):
+    def __init__(self, cfg):
         super().__init__()
-        assert img_size % patch_size == 0, "img_size must be divisible by patch_size"
+        
+        img_size=cfg.img_size
+        patch_size=cfg.patch_size
+        in_chans=cfg.in_chans
+        d_model=cfg.d_model
+        nhead=cfg.nhead
+        num_layers=cfg.num_layers
+        dropout=cfg.dropout     
+        
+        assert img_size % patch_size == 0
         self.img_size = img_size
         self.patch_size = patch_size
 
-        # 1) Patch Embedding (ViT의 patchify + linear projection 역할)
+        # Patch Embedding
         # (B,1,H,W) -> (B,d_model,H/P,W/P)
         self.patch_embed = nn.Conv2d(
             in_channels=in_chans,
@@ -38,15 +38,14 @@ class ImageEncoder(nn.Module):
             padding=0
         )
 
-        # 2) CLS token
         self.cls_token = nn.Parameter(torch.zeros(1, 1, d_model))
 
-        # 3) Positional Embedding
+        # Positional Embedding
         num_patches = (img_size // patch_size) * (img_size // patch_size)
         self.pos_embed = nn.Parameter(torch.zeros(1, 1 + num_patches, d_model))
         self.pos_drop = nn.Dropout(p=dropout)
 
-        # 4) Transformer Encoder
+        # Transformer Encoder
         enc_layer = nn.TransformerEncoderLayer(
             d_model=d_model,
             nhead=nhead,
@@ -55,20 +54,12 @@ class ImageEncoder(nn.Module):
         )
         self.encoder = nn.TransformerEncoder(enc_layer, num_layers=num_layers)
 
-        # (선택) LayerNorm (ViT에서 흔히 사용)
         self.norm = nn.LayerNorm(d_model)
 
-        # init (간단)
         nn.init.trunc_normal_(self.pos_embed, std=0.02)
         nn.init.trunc_normal_(self.cls_token, std=0.02)
 
     def forward(self, x):
-        """
-        x: (B, 1, H, W)  where H=W=img_size
-        return:
-          cls_feat: (B, d_model)  (분류/회귀용 대표 feature)
-          tokens:   (B, 1+num_patches, d_model) (원하면 활용)
-        """
         B, C, H, W = x.shape
 
         # Patch embedding
@@ -92,19 +83,16 @@ class ImageEncoder(nn.Module):
 
 
 class DownStreamTaskModel(nn.Module):
-    def __init__(self, enc_dims, output_dim):
+    def __init__(self, cfg):
         super(DownStreamTaskModel, self).__init__()
         
-        # enc_l1 = nn.TransformerEncoderLayer(d_model=512, nhead=8)
-        # enc2_l2 = nn.TransformerEncoderLayer(d_model=512, nhead=8)
+        d_model = cfg.d_model
+        output_dim = cfg.output_dim
         
-        self.enc1 = ImageEncoder()
-        self.enc2 = ImageEncoder()
-        # self.enc1 = nn.TransformerEncoder(enc_l1, num_layers=6)
-        # self.enc2 = nn.TransformerEncoder(enc2_l2, num_layers=6)
+        self.enc1 = ImageEncoder(cfg)
+        self.enc2 = ImageEncoder(cfg)
         
-        
-        self.fc = nn.Linear(512, output_dim)
+        self.fc = nn.Linear(d_model*2, output_dim)
         
         
     def forward(self, x1, x2):

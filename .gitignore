@@ -181,3 +181,7 @@ logs
 *.tar
 sample_data
 *.DS_Store
+.driveignore
+drive_sync.py
+client_secret.json
+*.pth

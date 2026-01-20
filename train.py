@@ -12,7 +12,7 @@ def train(args, cfg, dataloader, model, optimizer, criterion, device="cpu"):
     num_epochs = args.num_epochs
     best_val_loss = float('inf')
     
-    save_path = os.path.join(save_model_root_path + now + ".pth")
+    save_path = os.path.join(save_model_root_path, now + ".pth")
     
 
     # train & valid loop
@@ -20,8 +20,8 @@ def train(args, cfg, dataloader, model, optimizer, criterion, device="cpu"):
         model.train()
         train_loss_sum = 0.0
         train_count = 0
-        for (x1, x2), target in tqdm(dataloader['train'], desc=f"Epoch {epoch+1}/{num_epochs} Training"):
-            x1, x2, target = x1.to(device), x2.to(device), target.to(device)
+        for data in tqdm(dataloader['train'], desc=f"Epoch {epoch+1}/{num_epochs} Training"):
+            x1, x2, target = data["x1"].to(device), data["x2"].to(device), data["y"].to(device)
             
             optimizer.zero_grad()
             logits = model(x1, x2).squeeze(1)
@@ -45,8 +45,8 @@ def train(args, cfg, dataloader, model, optimizer, criterion, device="cpu"):
         all_outputs = []
         all_targets = []        
         with torch.no_grad():
-            for (x1, x2), target in tqdm(dataloader['val'], desc=f"Epoch {epoch+1}/{num_epochs} Validation"):
-                x1, x2, target = x1.to(device), x2.to(device), target.to(device)
+            for data in tqdm(dataloader['val'], desc=f"Epoch {epoch+1}/{num_epochs} Validation"):
+                x1, x2, target = data["x1"].to(device), data["x2"].to(device), data["y"].to(device)
 
                 logits = model(x1, x2).squeeze(1)
                 val_loss = criterion(logits, target)
