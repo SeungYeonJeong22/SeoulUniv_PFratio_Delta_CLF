@@ -1,0 +1,13 @@
+ipykernel
+ipython_pygments_lexers
+matplotlib
+monai
+opencv-python
+openpyxl
+pandas
+pip
+PyDrive
+scikit-learn
+torchvision
+tqdm
+wheel

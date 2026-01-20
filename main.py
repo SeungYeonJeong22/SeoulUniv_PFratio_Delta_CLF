@@ -18,10 +18,9 @@ def main():
     parser = ArgumentParser(description="A simple command-line tool.")
     parser.add_argument("--cfg_path", default="./config.json", type=str, help="Data and Model hyperparameter Config JSON File Path.")
     parser.add_argument("--task", choices=["upstream", "downstream"], default="downstream", help="Task to perform: upstream or downstream.")
-    
-    # Experiment settings
-    parser.add_argument("--batch_size", default=32, type=int, help="Batch size for training.")
-    parser.add_argument("--num_epochs", default=10, type=int, help="Number of epochs to train.")
+    parser.add_argument("--data_root_path", default=None, type=str, help="Override data root path in config.")
+
+    parser.add_argument("--is_save_model", type=bool, help="Whether to save the trained model.")
     
     # early stopping
     parser.add_argument("--early_stopping_patience", default=5, type=int, help="Early stopping patience.")
@@ -37,6 +36,9 @@ def main():
         cfg = cfg.upstream
     
     transform = get_transform(cfg)
+    
+    if args.data_root_path is not None:
+        cfg.data.root_path = args.data_root_path
     
     # Data Settings
     full_dataset = PFRatioDataset(cfg=cfg, transform=transform)
@@ -80,15 +82,10 @@ def main():
     
     # Model Settings
     model = DownStreamTaskModel(cfg.model)
-    if torch.backends.mps.is_available():
-        device = torch.device("mps")
-    elif torch.cuda.is_available():
-        device = torch.device("cuda")
-    else:
-        device = torch.device("cpu")
+    device = get_device()
     model.to(device)
     
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.exp_settings.learning_rate)
     criterion = torch.nn.BCEWithLogitsLoss()
 
     # Train

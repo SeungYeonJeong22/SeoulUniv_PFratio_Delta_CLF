@@ -9,20 +9,20 @@
 
         "exp_settings":{
             "batch_size": 16,
-            "num_epochs": 50,
+            "num_epochs": 100,
             "learning_rate": 0.0001,
             "weight_decay": 0.0001,
             "num_workers": 0
         },
 
         "transform":{
-            "image_size": 224
+            "image_size": 512
         },
 
         "model":{
             "name": "DownStreamTaskModel",
             
-            "img_size":224,
+            "img_size":512,
             "patch_size":16,
             "in_chans":1,
             "d_model":256,

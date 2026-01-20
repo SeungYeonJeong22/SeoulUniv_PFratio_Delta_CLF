@@ -9,11 +9,11 @@ def train(args, cfg, dataloader, model, optimizer, criterion, device="cpu"):
     save_model_root_path = cfg.save_model_root_path
     log_root_path = cfg.log_root_path
     
-    num_epochs = args.num_epochs
+    num_epochs = cfg.exp_settings.num_epochs
+    
     best_val_loss = float('inf')
     
     save_path = os.path.join(save_model_root_path, now + ".pth")
-    
 
     # train & valid loop
     for epoch in range(num_epochs):
@@ -75,8 +75,9 @@ def train(args, cfg, dataloader, model, optimizer, criterion, device="cpu"):
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             
-            torch.save(model.state_dict(), save_path)
-            print("Best model saved.")
+            if args.is_save_model:
+                torch.save(model.state_dict(), save_path)
+                print("Best model saved.")
 
         # # Logging
         # log_path = log_root_path, f"{now}_log.txt"

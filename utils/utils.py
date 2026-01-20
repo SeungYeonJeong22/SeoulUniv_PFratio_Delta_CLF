@@ -57,7 +57,7 @@ def get_device():
 
 # split dataset
 def split_dataset(dataset, labels, pids, random_state=42):
-    # 0.6/0.2/0,2 split
+    # 0.8/0.1/0,1 split
     labels = np.array(labels)
     
     unique_pids = np.unique(pids)
@@ -69,10 +69,10 @@ def split_dataset(dataset, labels, pids, random_state=42):
 
     pid_labels = np.array(pid_labels)
 
-    # 2. PID 단위 stratified split
+    # PID 단위 stratified split
     train_pids, temp_pids = train_test_split(
         unique_pids,
-        test_size=0.4,
+        test_size=0.2,
         random_state=random_state,
         stratify=pid_labels
     )

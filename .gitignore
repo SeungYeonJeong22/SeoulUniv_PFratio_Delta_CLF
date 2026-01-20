@@ -185,3 +185,4 @@ sample_data
 drive_sync.py
 client_secret.json
 *.pth
+*.zip
