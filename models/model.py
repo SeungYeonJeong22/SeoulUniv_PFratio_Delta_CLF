@@ -81,10 +81,8 @@ Pass through Fully Connected Layer
 
 
 def build_resnet50_encoder_from_moco(ckpt_path, in_chans=1, device="cpu"):
-    # 1) backbone 생성 (MoCo는 보통 resnet50)
     model = models.resnet50(weights=None)
 
-    # grayscale이면 conv1 바꿔야 함 (중요!)
     if in_chans == 1:
         old = model.conv1
         model.conv1 = nn.Conv2d(
@@ -98,7 +96,7 @@ def build_resnet50_encoder_from_moco(ckpt_path, in_chans=1, device="cpu"):
     ckpt = torch.load(ckpt_path, map_location=device)
     state = ckpt["state_dict"] if "state_dict" in ckpt else ckpt
 
-    # 3) encoder_q만 뽑고 prefix 제거 + fc 제거
+    # encoder_q만 뽑고 prefix 제거 + fc 제거
     new_state = {}
     for k, v in state.items():
         if k.startswith("module.encoder_q."):
@@ -113,11 +111,7 @@ def build_resnet50_encoder_from_moco(ckpt_path, in_chans=1, device="cpu"):
         if w.shape[1] == 3:
             new_state["conv1.weight"] = w.mean(dim=1, keepdim=True)            
 
-    # 4) 로드 (conv1 채널 달라서 mismatch 날 수 있음 → 아래에서 처리)
-    msg = model.load_state_dict(new_state, strict=False)
-    print("Loaded with:", msg)
-
-    # 5) encoder로만 쓰려면 fc 제거/무시
+    # encoder로만 쓰려면 fc 제거/무시
     model.fc = nn.Identity()
 
     return model

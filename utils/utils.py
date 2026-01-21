@@ -60,8 +60,6 @@ def get_device():
 PID를 기준으로 나누되, 각 PID의 slice당 레이블의 분포 차이를 stratified하게 유지하도록 나눔
 """
 def split_dataset(dataset, labels, pids, random_state=42):
-    
-    
     # 0.8/0.1/0,1 split
     labels = np.array(labels)
     
@@ -103,20 +101,20 @@ def split_dataset(dataset, labels, pids, random_state=42):
     )    
     
     
-    # indices = np.arange(len(dataset))
+# EarlSyStopping
+class EarlyStopping:
+    def __init__(self, patience=5, min_delta=0.0):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.best = float("inf")
+        self.counter = 0
 
-    # train_idx, temp_idx = train_test_split(
-    #     indices,
-    #     test_size=0.4,
-    #     random_state=random_state,
-    #     stratify=labels
-    # )
-
-    # val_idx, test_idx = train_test_split(
-    #     temp_idx,
-    #     test_size=0.5,
-    #     random_state=random_state,
-    #     stratify=labels[temp_idx]
-    # )
-
-    # return Subset(dataset, train_idx), Subset(dataset, val_idx), Subset(dataset, test_idx)
+    def step(self, val_loss: float) -> bool:
+        # True 반환이면 stop
+        if val_loss < self.best - self.min_delta:
+            self.best = val_loss
+            self.counter = 0
+            return False
+        else:
+            self.counter += 1
+            return self.counter >= self.patience

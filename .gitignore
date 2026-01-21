@@ -186,3 +186,7 @@ drive_sync.py
 client_secret.json
 *.pth
 *.zip
+*.png
+*.xlsx
+*.csv
+data/*

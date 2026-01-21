@@ -17,16 +17,17 @@ def main():
     parser = ArgumentParser(description="A simple command-line tool.")
     parser.add_argument("--cfg_path", default="./config.json", type=str, help="Data and Model hyperparameter Config JSON File Path.")
     parser.add_argument("--task", choices=["upstream", "downstream"], default="downstream", help="Task to perform: upstream or downstream.")
-    parser.add_argument("--data_root_path", default=None, type=str, help="Override data root path in config.")
 
-    parser.add_argument("--is_save_model", type=bool, help="Whether to save the trained model.")
+    parser.add_argument("--seed", default=42, type=int, help="Random seed for reproducibility.")
+
+    # Overwrite to use colab
+    parser.add_argument("--data_root_path", default=None, type=str, help="Override data root path in config.")
     
-    # early stopping
-    parser.add_argument("--early_stopping_patience", default=5, type=int, help="Early stopping patience.")
-    
+    # 실험이 안정적이여서 모델 저장할 때 사용
+    parser.add_argument("--save_model", action="store_true", help="Saving the model(Using: --save_model).")
     
     args = parser.parse_args()
-    fix_seed(42)
+    fix_seed(args.seed)
 
     cfg = load_cfg(args.cfg_path)
     if args.task == "downstream":

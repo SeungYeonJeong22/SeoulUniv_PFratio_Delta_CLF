@@ -2,18 +2,24 @@ import torch
 from tqdm import tqdm
 from datetime import datetime
 import os
+from utils.utils import EarlyStopping
 from utils.measure import evaluate_model
 
 def train(args, cfg, dataloader, model, optimizer, criterion, device="cpu"):
+    # save model
     now = datetime.now().strftime("%m%d_%H%M")
-    save_model_root_path = cfg.save_model_root_path
-    log_root_path = cfg.log_root_path
-    
-    num_epochs = cfg.exp_settings.num_epochs
-    
-    best_val_loss = float('inf')
-    
+    save_model_root_path = getattr(cfg, "save_model_root_path", None)
     save_path = os.path.join(save_model_root_path, now + ".pth")
+    
+    # early stopping settings
+    patience = getattr(cfg.exp_settings, "ealry_stopping_patience", 5)
+    min_delta = getattr(cfg.exp_settings, "early_stopping_min_delta", 0.0)
+    early_stopper = EarlyStopping(patience=patience, min_delta=min_delta)
+    
+    # exp settings
+    num_epochs = cfg.exp_settings.num_epochs
+    best_val_loss = float('inf')
+
 
     # train & valid loop
     for epoch in range(num_epochs):
@@ -78,7 +84,7 @@ def train(args, cfg, dataloader, model, optimizer, criterion, device="cpu"):
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             
-            if args.is_save_model:
+            if getattr(args, "save_model", False):
                 torch.save(model.state_dict(), save_path)
                 print("Best model saved.")
 
@@ -86,3 +92,7 @@ def train(args, cfg, dataloader, model, optimizer, criterion, device="cpu"):
         # log_path = log_root_path, f"{now}_log.txt"
         # with open(log_path, "a") as f:
         #     f.write(f"{now} | Epoch {epoch+1}/{num_epochs}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}\n")
+        
+        if early_stopper.step(val_loss):
+            print(f"Early stopping triggered at epoch {epoch+1}. (patience={patience})")
+            break        
