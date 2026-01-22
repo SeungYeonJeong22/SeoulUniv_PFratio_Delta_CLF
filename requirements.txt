@@ -7,7 +7,9 @@ openpyxl
 pandas
 pip
 PyDrive
+python-dotenv
 scikit-learn
-torchvision
-tqdm
+timm
+torchmetrics
+wandb
 wheel

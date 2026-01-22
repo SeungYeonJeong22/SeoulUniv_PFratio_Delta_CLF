@@ -1,19 +1,20 @@
 import torch
 from tqdm import tqdm
-from datetime import datetime
 import os
-from utils.utils import EarlyStopping
+from utils.utils import *
 from utils.measure import evaluate_model
 
-def train(args, cfg, dataloader, model, optimizer, criterion, device="cpu"):
+
+def train(args, cfg, wandb_run, dataloader, model, optimizer, criterion, device="cpu"):
+    now = get_time()
+    
     # save model
-    now = datetime.now().strftime("%m%d_%H%M")
     save_model_root_path = getattr(cfg, "save_model_root_path", None)
     save_path = os.path.join(save_model_root_path, now + ".pth")
     
     # early stopping settings
-    patience = getattr(cfg.exp_settings, "ealry_stopping_patience", 5)
-    min_delta = getattr(cfg.exp_settings, "early_stopping_min_delta", 0.0)
+    patience = getattr(cfg.exp_settings, "ealry_stopping_patience", 10)
+    min_delta = getattr(cfg.exp_settings, "early_stopping_min_delta", 1e-5)
     early_stopper = EarlyStopping(patience=patience, min_delta=min_delta)
     
     # exp settings
@@ -24,6 +25,7 @@ def train(args, cfg, dataloader, model, optimizer, criterion, device="cpu"):
     # train & valid loop
     for epoch in range(num_epochs):
         model.train()
+        model.enc.eval()
         train_loss_sum = 0.0
         train_count = 0
         for data in tqdm(dataloader['train'], desc=f"Epoch {epoch+1}/{num_epochs} Training"):
@@ -42,6 +44,7 @@ def train(args, cfg, dataloader, model, optimizer, criterion, device="cpu"):
             train_count += bs
 
         train_loss = train_loss_sum / max(train_count, 1)
+        print()
         print(f"Epoch {epoch+1}/{num_epochs}, Train Loss: {train_loss:.4f}")
         
         # validation
@@ -78,21 +81,32 @@ def train(args, cfg, dataloader, model, optimizer, criterion, device="cpu"):
         print(f"Validation Loss: {val_loss:.4f}")
         print(f"ROC AUC: {roc_auc:.4f}, Accuracy: {accuracy:.4f}, F1: {f1:.4f}, "
               f"Sensitivity: {sensitivity:.4f}, Specificity: {specificity:.4f}")
-        print("")
 
         # Save best
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             
             if getattr(args, "save_model", False):
+                print()
                 torch.save(model.state_dict(), save_path)
                 print("Best model saved.")
-
-        # # Logging
-        # log_path = log_root_path, f"{now}_log.txt"
-        # with open(log_path, "a") as f:
-        #     f.write(f"{now} | Epoch {epoch+1}/{num_epochs}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}\n")
         
-        if early_stopper.step(val_loss):
-            print(f"Early stopping triggered at epoch {epoch+1}. (patience={patience})")
-            break        
+        if early_stopper.step(val_loss, patience):
+            print()
+            print(f"Early stop at {epoch+1}")
+            break
+        
+        if wandb_run:
+            wandb_run.log({
+                "Train Loss": train_loss,
+                "Validation Loss": val_loss,
+                "ROC AUC": roc_auc,
+                "Accuracy": accuracy,
+                "F1 Score": f1,
+                "Sensitivity": sensitivity,
+                "Specificity": specificity,
+            })
+        
+        print()
+    if wandb_run:
+        wandb_run.finish()

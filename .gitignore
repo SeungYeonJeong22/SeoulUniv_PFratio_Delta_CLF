@@ -190,3 +190,5 @@ client_secret.json
 *.xlsx
 *.csv
 data/*
+*.env
+client_secrets.json

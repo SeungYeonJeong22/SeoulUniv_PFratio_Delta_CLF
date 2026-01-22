@@ -1,36 +1,36 @@
 {
-    "downstream":{
+    "downstream_task1":{
         "data_root_path": "./data",
         "image_dirs": "data_png",
-        "csv_file": "paired_ns_train_simple.csv",
-        "renamed_excel_path": "data/renamed_subjectID_230309.xlsx",
-        "pretrained_model_path": "models/CheSS.pth.tar",
+        "pretrained_model_path": "models/only_state_dict.pth.tar",
         "save_model_root_path": "save",
         "log_root_path": "logs",
+        
+        "dataset":{
+            "train_csv_file": "paired_ns_train.csv",
+            "valid_csv_file": "paired_ns_val.csv",
+            "test_csv_file": "paired_ns_test.csv"
+        },
 
         "exp_settings":{
-            "batch_size": 16,
+            "learning_rate": 1e-3,
+            "batch_size": 64,
             "num_epochs": 100,
-            "learning_rate": 1e-4,
             "weight_decay": 1e-4,
             "num_workers": 4,
             
-            "ealry_stopping_patience": 20,
-            "min_delta": 0.001
+            "ealry_stopping_patience": 10,
+            "min_delta": 1e-4
         },
 
         "transform":{
-            "image_size": 512
+            "image_size": 128
         },
 
         "model":{
             "name": "DownStreamTaskModel",
-            
-            "img_size":512,
-            "patch_size":16,
             "in_chans":1,
             "d_model":256,
-            "nhead":4,
             "num_layers":4,
             "dropout":0.0,
     

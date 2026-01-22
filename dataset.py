@@ -7,7 +7,13 @@ import os
 
 class PFRatioDataset(Dataset):
     def __init__(self, cfg, flag="train", transform=None):
-        df_path = os.path.join(cfg.data_root_path, cfg.csv_file)
+        if flag == "train":
+            df_path = os.path.join(cfg.data_root_path, cfg.dataset.train_csv_file)
+        elif flag == "valid":
+            df_path = os.path.join(cfg.data_root_path, cfg.dataset.valid_csv_file)
+        elif flag == "test":
+            df_path = os.path.join(cfg.data_root_path, cfg.dataset.test_csv_file)
+
         img_dirs = os.path.join(cfg.data_root_path, cfg.image_dirs)
         self.df = pd.read_csv(df_path)
         
