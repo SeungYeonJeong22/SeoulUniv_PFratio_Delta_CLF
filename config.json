@@ -24,7 +24,7 @@
         },
 
         "transform":{
-            "image_size": 128
+            "image_size": 512
         },
 
         "model":{
@@ -38,8 +38,84 @@
             "output_dim":1
         }
     },
-    "upstream":{
-        "data_root_path": "sample_data/",
-        "csv_path": "sample_data/sample.csv"
-    }
+
+    "downstream_task2":{
+        "data_root_path": "./data",
+        "image_dirs": "data_png",
+        "pretrained_model_path": "models/only_state_dict.pth.tar",
+        "save_model_root_path": "save",
+        "log_root_path": "logs",
+        
+        "dataset":{
+            "train_csv_file": "paired_2c_train.csv",
+            "valid_csv_file": "paired_2c_val.csv",
+            "test_csv_file": "paired_2c_test.csv"
+        },
+
+        "exp_settings":{
+            "learning_rate": 1e-3,
+            "batch_size": 64,
+            "num_epochs": 100,
+            "weight_decay": 1e-4,
+            "num_workers": 4,
+            
+            "ealry_stopping_patience": 10,
+            "min_delta": 1e-4
+        },
+
+        "transform":{
+            "image_size": 512
+        },
+
+        "model":{
+            "name": "DownStreamTaskModel",
+            "in_chans":1,
+            "d_model":256,
+            "num_layers":4,
+            "dropout":0.0,
+    
+            "enc_dims":512,
+            "output_dim":1
+        }
+    },
+
+    "downstream_task3":{
+        "data_root_path": "./data",
+        "image_dirs": "data_png",
+        "pretrained_model_path": "models/only_state_dict.pth.tar",
+        "save_model_root_path": "save",
+        "log_root_path": "logs",
+        
+        "dataset":{
+            "train_csv_file": "paired_1c_train.csv",
+            "valid_csv_file": "paired_1c_val.csv",
+            "test_csv_file": "paired_1c_test.csv"
+        },
+
+        "exp_settings":{
+            "learning_rate": 1e-3,
+            "batch_size": 64,
+            "num_epochs": 100,
+            "weight_decay": 1e-4,
+            "num_workers": 4,
+            
+            "ealry_stopping_patience": 10,
+            "min_delta": 1e-4
+        },
+
+        "transform":{
+            "image_size": 512
+        },
+
+        "model":{
+            "name": "DownStreamTaskModel",
+            "in_chans":1,
+            "d_model":256,
+            "num_layers":4,
+            "dropout":0.0,
+    
+            "enc_dims":512,
+            "output_dim":1
+        }
+    }        
 }

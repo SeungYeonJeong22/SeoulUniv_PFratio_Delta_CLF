@@ -35,7 +35,8 @@ def load_checkpoint(model, ckpt_path: str, device="cpu", strict: bool = True):
 def test():
     parser = ArgumentParser(description="A simple command-line tool.")
     parser.add_argument("--cfg_path", default="./config.json", type=str, help="Data and Model hyperparameter Config JSON File Path.")
-    parser.add_argument("--task", choices=["upstream", "downstream_task1"], default="downstream_task1", help="Task to perform: upstream or downstream.")
+    parser.add_argument("--task", choices=["downstream_task1", "downstream_task2", "downstream_task3"], default="downstream_task1", help="Task to perform: upstream or downstream.")
+    parser.add_argument("--pretrained_model", default="only_state_dict.pth.tar", help="pretrained_model.")
 
     parser.add_argument("--seed", default=42, type=int, help="Random seed for reproducibility.")
 
@@ -55,6 +56,12 @@ def test():
     cfg = load_cfg(args.cfg_path)
     if args.task == "downstream_task1":
         cfg = cfg.downstream_task1
+    elif args.task == "downstream_task2":
+        cfg = cfg.downstream_task2
+    elif args.task == "downstream_task3":
+        cfg = cfg.downstream_task3
+        
+    cfg.pretrained_model_path = os.path.join("models", args.pretrained_model)        
         
     transform = get_transform(cfg)
     
@@ -75,9 +82,9 @@ def test():
     }    
     
     best_model = args.best_model
-    ckpt_path = os.path.join('./save', best_model)
+    ckpt_path = os.path.join('./save', args.task, best_model)
     
-    print(ckpt_path)
+    print("Check Point Path: ", ckpt_path)
 
     model = DownStreamTaskModel(cfg)
     model = load_checkpoint(model, ckpt_path, device=device, strict=True)
@@ -85,9 +92,6 @@ def test():
 
     model.to(device)
     model.eval()
-
-    test_loss_sum = 0.0
-    test_count = 0
 
     all_outputs = []
     all_targets = []
@@ -118,34 +122,24 @@ def test():
     # csv 저장
     # cols = ['best_model','roc_auc','accuracy','f1','sensitivity','specificity']
     os.makedirs("./res", exist_ok=True)
-    save_test_res_path = os.path.join("./res", "test_results.csv")
+    
+    if args.task == "downstream_task1":
+        file_nm = "res_task1"
+    elif args.task == "downstream_task2":
+        file_nm = "res_task2"
+    elif args.task == "downstream_task3":
+        file_nm = "res_task3"
+    save_test_res_path = os.path.join("./res", f"{file_nm}.csv")
     
     # csv가 없으면 헤더부터 저장
     if not os.path.exists(save_test_res_path):
-        pd.DataFrame(columns=['best_model','roc_auc','accuracy','sensitivity','specificity','f1']).to_csv(save_test_res_path, index=False)
+        pd.DataFrame(columns=['best_model', 'roc_auc','accuracy','sensitivity','specificity','f1']).to_csv(save_test_res_path, index=False)
         
     # 이후 결과 추가 저장
     pd.DataFrame(
         [[args.best_model, f"{roc_auc:.4f}", f"{accuracy:.4f}", f"{sensitivity:.4f}", f"{specificity:.4f}", f"{f1:.4f}"]],
         columns=['best_model','roc_auc','accuracy','sensitivity','specificity','f1']
     ).to_csv(save_test_res_path, mode='a', header=False, index=False)
-    
-    
-    
-
-    
-    
-    # return {
-    #     "roc_auc": roc_auc,
-    #     "accuracy": accuracy,
-    #     "f1": f1,
-    #     "sensitivity": sensitivity,
-    #     "specificity": specificity,
-    #     "probs": all_outputs,
-    #     "targets": all_targets,
-    #     "ids": all_pids if len(all_pids) > 0 else None
-    # }
-
         
 if __name__=='__main__':
     test()

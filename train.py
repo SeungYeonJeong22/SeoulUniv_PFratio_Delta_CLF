@@ -10,7 +10,10 @@ def train(args, cfg, wandb_run, dataloader, model, optimizer, criterion, device=
     
     # save model
     save_model_root_path = getattr(cfg, "save_model_root_path", None)
-    save_path = os.path.join(save_model_root_path, now + ".pth")
+    task = args.task
+    os.makedirs(os.path.join(save_model_root_path, task), exist_ok=True)
+    
+    save_path = os.path.join(save_model_root_path, task, now + ".pth")
     
     # early stopping settings
     patience = getattr(cfg.exp_settings, "ealry_stopping_patience", 10)
@@ -108,5 +111,12 @@ def train(args, cfg, wandb_run, dataloader, model, optimizer, criterion, device=
             })
         
         print()
+
+    print('--'* 20)
+    print("Training completed.")
+    print()
+    print(f"Save Point: {save_path}")
+    print('--'* 20)
+    
     if wandb_run:
         wandb_run.finish()

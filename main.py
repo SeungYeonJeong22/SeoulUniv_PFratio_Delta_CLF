@@ -15,7 +15,8 @@ filterwarnings("ignore")
 def main():
     parser = ArgumentParser(description="A simple command-line tool.")
     parser.add_argument("--cfg_path", default="./config.json", type=str, help="Data and Model hyperparameter Config JSON File Path.")
-    parser.add_argument("--task", choices=["upstream", "downstream_task1"], default="downstream_task1", help="Task to perform: upstream or downstream.")
+    parser.add_argument("--task", choices=["downstream_task1", "downstream_task2", "downstream_task3"], default="downstream_task1", help="Task to perform: upstream or downstream.")
+    parser.add_argument("--pretrained_model", default="only_state_dict.pth.tar", help="pretrained_model.")
 
     parser.add_argument("--seed", default=42, type=int, help="Random seed for reproducibility.")
 
@@ -41,8 +42,13 @@ def main():
     cfg = load_cfg(args.cfg_path)
     if args.task == "downstream_task1":
         cfg = cfg.downstream_task1
-    else:
-        cfg = cfg.upstream
+    elif args.task == "downstream_task2":
+        cfg = cfg.downstream_task2
+    elif args.task == "downstream_task3":
+        cfg = cfg.downstream_task3
+        
+    cfg.pretrained_model_path = os.path.join("models", args.pretrained_model)
+        
         
     transform = get_transform(cfg)
     

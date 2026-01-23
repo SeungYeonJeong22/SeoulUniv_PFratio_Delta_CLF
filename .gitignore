@@ -192,3 +192,4 @@ client_secret.json
 data/*
 *.env
 client_secrets.json
+models/model.py
