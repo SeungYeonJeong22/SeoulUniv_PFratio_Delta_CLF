@@ -1,4 +1,3 @@
-from argparse import ArgumentParser
 from dataset import PFRatioDataset
 from train import train
 from models.model import DownStreamTaskModel
@@ -13,29 +12,7 @@ from warnings import filterwarnings
 filterwarnings("ignore")
 
 def main():
-    parser = ArgumentParser(description="A simple command-line tool.")
-    parser.add_argument("--cfg_path", default="./config.json", type=str, help="Data and Model hyperparameter Config JSON File Path.")
-    parser.add_argument("--task", choices=["downstream_task1", "downstream_task2", "downstream_task3"], default="downstream_task1", help="Task to perform: upstream or downstream.")
-    parser.add_argument("--pretrained_model", default="only_state_dict.pth.tar", help="pretrained_model.")
-
-    parser.add_argument("--seed", default=42, type=int, help="Random seed for reproducibility.")
-
-    # Overwrite to use colab
-    parser.add_argument("--data_root_path", default=None, type=str, help="Override data root path in config.")
-    
-    
-    # Overwirte to model hyperparameter
-    parser.add_argument("--learning_rate", default=None, type=float, help="Override learning rate in config.")
-    parser.add_argument("--weight_decay", default=None, type=float, help="Override weight decay in config.")
-    parser.add_argument("--batch_size", default=None, type=int, help="Override batch size in config.")
-    parser.add_argument("--num_epochs", default=None, type=int, help="Override number of epochs in config.")
-    parser.add_argument("--early_stopping_patience", default=None, type=int, help="Override early stopping patience in config.")
-    
-    
-    # 실험이 안정적이여서 모델 저장할 때 사용
-    parser.add_argument("--save_model", action="store_true", help="Saving the model(Using: --save_model).")
-    parser.add_argument("--wandb", action="store_true", help="Using wandb logging(Using: --wandb).")
-    
+    parser = manage_args()
     args = parser.parse_args()
     fix_seed(args.seed)
 
@@ -53,6 +30,11 @@ def main():
     transform = get_transform(cfg)
     
     cfg.data_root_path = args.data_root_path if args.data_root_path is not None else cfg.data_root_path
+    
+    if args.argument_dir:
+        cfg.dataset.train_csv_file = os.path.join(args.argument_dir, cfg.dataset.train_csv_file)
+        cfg.dataset.valid_csv_file = os.path.join(args.argument_dir, cfg.dataset.valid_csv_file)
+    
     cfg.exp_settings.learning_rate = args.learning_rate if args.learning_rate is not None else cfg.exp_settings.learning_rate
     cfg.exp_settings.weight_decay = args.weight_decay if args.weight_decay is not None else cfg.exp_settings.weight_decay
     cfg.exp_settings.batch_size = args.batch_size if args.batch_size is not None else cfg.exp_settings.batch_size
@@ -95,11 +77,11 @@ def main():
     }
     
     # Model Settings
-    model = DownStreamTaskModel(cfg)
+    model = DownStreamTaskModel(args, cfg)
     device = get_device()
     model.to(device)
     
-    optimizer = torch.optim.Adam(
+    optimizer = torch.optim.AdamW(
         model.parameters(), 
         lr=cfg.exp_settings.learning_rate,
         weight_decay=cfg.exp_settings.weight_decay

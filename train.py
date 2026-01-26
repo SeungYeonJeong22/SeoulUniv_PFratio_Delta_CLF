@@ -14,6 +14,11 @@ def train(args, cfg, wandb_run, dataloader, model, optimizer, criterion, device=
     os.makedirs(os.path.join(save_model_root_path, task), exist_ok=True)
     
     save_path = os.path.join(save_model_root_path, task, now + ".pth")
+    print()
+    print('--'*20)
+    print(f"Save Path: {save_path}")
+    print('--'*20)
+    print()
     
     # early stopping settings
     patience = getattr(cfg.exp_settings, "ealry_stopping_patience", 10)
@@ -79,11 +84,11 @@ def train(args, cfg, wandb_run, dataloader, model, optimizer, criterion, device=
         all_outputs = torch.cat(all_outputs, dim=0)
         all_targets = torch.cat(all_targets, dim=0)
 
-        roc_auc, accuracy, f1, sensitivity, specificity = evaluate_model(all_outputs, all_targets)
+        roc_auc, accuracy, f1, sensitivity, specificity, best_threshold = evaluate_model(all_outputs, all_targets)
 
         print(f"Validation Loss: {val_loss:.4f}")
         print(f"ROC AUC: {roc_auc:.4f}, Accuracy: {accuracy:.4f}, F1: {f1:.4f}, "
-              f"Sensitivity: {sensitivity:.4f}, Specificity: {specificity:.4f}")
+              f"Sensitivity: {sensitivity:.4f}, Specificity: {specificity:.4f}, Best_TH: {best_threshold:.2f}")
 
         # Save best
         if val_loss < best_val_loss:
@@ -108,6 +113,7 @@ def train(args, cfg, wandb_run, dataloader, model, optimizer, criterion, device=
                 "F1 Score": f1,
                 "Sensitivity": sensitivity,
                 "Specificity": specificity,
+                "Best_Threshhold": best_threshold
             })
         
         print()
@@ -115,7 +121,7 @@ def train(args, cfg, wandb_run, dataloader, model, optimizer, criterion, device=
     print('--'* 20)
     print("Training completed.")
     print()
-    print(f"Save Point: {save_path}")
+    print(f"Save Path: {save_path}")
     print('--'* 20)
     
     if wandb_run:

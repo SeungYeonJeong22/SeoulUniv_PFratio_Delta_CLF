@@ -1,17 +1,41 @@
 import os
 import torch
 from tqdm import tqdm
+import pandas as pd
 
 from utils.utils import *
 from utils.measure import evaluate_model
 from utils.transform import *
 
-from argparse import ArgumentParser
 from dataset import PFRatioDataset
 from torch.utils.data import DataLoader
 
 from monai.data import pad_list_data_collate
 from models.model import DownStreamTaskModel
+
+def stack_inference(results, pid, conf, preds, y, path1, path2):
+    if torch.is_tensor(y):
+        y_list = y.detach().cpu().view(-1).tolist()
+    else:
+        y_list = list(y)
+
+    # pid/idx도 tensor일 수 있으니 정리
+    if torch.is_tensor(pid):
+        pid_list = pid.detach().cpu().view(-1).tolist()
+    else:
+        pid_list = list(pid)
+
+    for i in range(len(preds)):
+        results.append({
+            "PID": int(pid_list[i]),
+            "pred": float(preds[i].item()),
+            "label": int(y_list[i]),
+            "confidence": float(conf[i].item()),
+            "cxr path1": path1[i],
+            "cxr path2": path2[i],
+        })
+        
+    return results
 
 
 def load_checkpoint(model, ckpt_path: str, device="cpu", strict: bool = True):
@@ -33,18 +57,7 @@ def load_checkpoint(model, ckpt_path: str, device="cpu", strict: bool = True):
 
 
 def test():
-    parser = ArgumentParser(description="A simple command-line tool.")
-    parser.add_argument("--cfg_path", default="./config.json", type=str, help="Data and Model hyperparameter Config JSON File Path.")
-    parser.add_argument("--task", choices=["downstream_task1", "downstream_task2", "downstream_task3"], default="downstream_task1", help="Task to perform: upstream or downstream.")
-    parser.add_argument("--pretrained_model", default="only_state_dict.pth.tar", help="pretrained_model.")
-
-    parser.add_argument("--seed", default=42, type=int, help="Random seed for reproducibility.")
-
-    # Overwrite to use colab
-    parser.add_argument("--data_root_path", default=None, type=str, help="Override data root path in config.")
-    
-    parser.add_argument("--best_model", default=None, required=True, type=str, help="best model checkpoint name for testing. (Using: model.pth)")
-    
+    parser = manage_args(mode='test')
     args = parser.parse_args()
     
     
@@ -65,10 +78,11 @@ def test():
         
     transform = get_transform(cfg)
     
-    if args.data_root_path is not None:
-        cfg.data_root_path = args.data_root_path    
+    cfg.data_root_path = args.data_root_path if args.data_root_path is not None else cfg.data_root_path
+    if args.argument_dir:
+        cfg.dataset.test_csv_file = os.path.join(args.argument_dir, cfg.dataset.test_csv_file)
 
-    test_ds = PFRatioDataset(cfg=cfg, flag="test",transform=transform)
+    test_ds = PFRatioDataset(cfg=cfg, reverse=args.reverse, flag="test", transform=transform)
     test_loader = DataLoader(
         test_ds,
         batch_size=cfg.exp_settings.batch_size,
@@ -86,7 +100,7 @@ def test():
     
     print("Check Point Path: ", ckpt_path)
 
-    model = DownStreamTaskModel(cfg)
+    model = DownStreamTaskModel(args, cfg)
     model = load_checkpoint(model, ckpt_path, device=device, strict=True)
     print(f"Loaded checkpoint: {ckpt_path}")
 
@@ -95,29 +109,36 @@ def test():
 
     all_outputs = []
     all_targets = []
-    all_pids = []  
 
+    results = []
     with torch.no_grad():
         for data in tqdm(dataloader["test"], desc="Testing"):
             x1 = data["x1"].to(device)
             x2 = data["x2"].to(device)
-            target = data['y'].to(device)
-            pid = data['pid']
+            target  = data["y"]            # cpu여도 됨
+            pid = data["pid"]
+            path1 = data["cxr_path1"]
+            path2 = data["cxr_path2"]
             
             out = model(x1, x2)
             logits = out.squeeze(1)
 
-            probs = torch.sigmoid(logits)
-            all_outputs.append(probs.detach().cpu())
-            all_targets.append(target.detach().cpu())
-            all_pids.append(pid)
+            probs = torch.sigmoid(logits).detach().cpu().view(-1)
+            preds = (probs >= 0.5).long() 
+            
+            conf = torch.where(preds == 1, probs, 1 - probs)
+            
+            all_outputs.append(probs)
+            all_targets.append(target.detach().cpu().view(-1))
+            
+            results = stack_inference(results, pid, conf, preds, target, path1, path2)
 
     all_outputs = torch.cat(all_outputs, dim=0)
     all_targets = torch.cat(all_targets, dim=0)
 
-    roc_auc, accuracy, f1, sensitivity, specificity = evaluate_model(all_outputs, all_targets)
+    roc_auc, accuracy, f1, sensitivity, specificity, best_threshold = evaluate_model(all_outputs, all_targets)
     print(f"ROC AUC: {roc_auc:.4f}, Accuracy: {accuracy:.4f}, Sensitivity: {sensitivity:.4f}, "
-            f"Specificity: {specificity:.4f}, F1: {f1:.4f}")
+            f"Specificity: {specificity:.4f}, F1: {f1:.4f}, Best_TH: {best_threshold:.2f}")
 
     # csv 저장
     # cols = ['best_model','roc_auc','accuracy','f1','sensitivity','specificity']
@@ -129,17 +150,27 @@ def test():
         file_nm = "res_task2"
     elif args.task == "downstream_task3":
         file_nm = "res_task3"
-    save_test_res_path = os.path.join("./res", f"{file_nm}.csv")
+    save_test_res_path = os.path.join("./res", args.task, f"{file_nm}.csv")
     
-    # csv가 없으면 헤더부터 저장
-    if not os.path.exists(save_test_res_path):
-        pd.DataFrame(columns=['best_model', 'roc_auc','accuracy','sensitivity','specificity','f1']).to_csv(save_test_res_path, index=False)
+    # inference를
+    if not getattr(args, "only_inference", False):
+        # csv가 없으면 헤더부터 저장
+        if not os.path.exists(save_test_res_path):
+            pd.DataFrame(columns=['best_model', 'roc_auc','accuracy','sensitivity','specificity','f1', 'best_thershhold', 'etc']).to_csv(save_test_res_path, index=False)
+            
+        # 이후 결과 추가 저장
+        pd.DataFrame(
+            [[args.best_model, f"{roc_auc:.4f}", f"{accuracy:.4f}", f"{sensitivity:.4f}", f"{specificity:.4f}", f"{f1:.4f}", f"Best_TH: {best_threshold:.2f}", f"{args.etc}"]],
+            columns=['best_model','roc_auc','accuracy','sensitivity','specificity','f1', 'best_thershhold', 'etc']
+        ).to_csv(save_test_res_path, mode='a', header=False, index=False)
         
-    # 이후 결과 추가 저장
-    pd.DataFrame(
-        [[args.best_model, f"{roc_auc:.4f}", f"{accuracy:.4f}", f"{sensitivity:.4f}", f"{specificity:.4f}", f"{f1:.4f}"]],
-        columns=['best_model','roc_auc','accuracy','sensitivity','specificity','f1']
-    ).to_csv(save_test_res_path, mode='a', header=False, index=False)
+    
+    if getattr(args, "reverse", False):
+        inference_nm = os.path.join("./res", args.task, "R_" + args.best_model.replace(".pth", ".csv"))
+    else:
+        inference_nm = os.path.join("./res", args.task, args.best_model.replace(".pth", ".csv"))
+    pd.DataFrame(results).to_csv(inference_nm, index=False)    
         
+                
 if __name__=='__main__':
     test()

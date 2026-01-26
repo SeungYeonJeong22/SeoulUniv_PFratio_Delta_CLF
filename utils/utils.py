@@ -1,13 +1,17 @@
 import os
 import random
 import numpy as np
-import pandas as pd
 import json
 from types import SimpleNamespace
+import cv2
 
 import torch
-from torch.utils.data import Subset
-from sklearn.model_selection import train_test_split
+# from torch.utils.data import Subset
+# from sklearn.model_selection import train_test_split
+
+import torch
+import torch.nn.functional as F
+
 
 from dotenv import load_dotenv
 load_dotenv("wandb.env")
@@ -65,51 +69,81 @@ def get_time():
     
     return now
 
-# # split dataset
-# """
-# PID를 기준으로 나누되, 각 PID의 slice당 레이블의 분포 차이를 stratified하게 유지하도록 나눔
-# (Deprecated)
-# """
-# def split_dataset(dataset, labels, pids, random_state=42):
-#     # 0.8/0.1/0,1 split
-#     labels = np.array(labels)
-    
-#     unique_pids = np.unique(pids)
-#     pid_labels = []
-    
-#     for pid in unique_pids:
-#         pid_labels.append(labels[pids == pid][0])
 
-#     pid_labels = np.array(pid_labels)
+class GradCAM:
+    def __init__(self, model, target_layer):
+        self.model = model
+        self.target_layer = target_layer
+        self.activations = None
+        self.gradients = None
+        self._register_hooks()
 
-#     # PID 단위 stratified split
-#     train_pids, temp_pids = train_test_split(
-#         unique_pids,
-#         test_size=0.2,
-#         random_state=random_state,
-#         stratify=pid_labels
-#     )
+    def _register_hooks(self):
+        def forward_hook(module, input, output):
+            self.activations = output  # detach 하지 말기
 
-#     # temp에 해당하는 pid_labels 다시 구성
-#     temp_labels = pid_labels[np.isin(unique_pids, temp_pids)]
+        def backward_hook(module, grad_in, grad_out):
+            self.gradients = grad_out[0]
 
-#     val_pids, test_pids = train_test_split(
-#         temp_pids,
-#         test_size=0.5,
-#         random_state=random_state,
-#         stratify=temp_labels
-#     )
+        self.target_layer.register_forward_hook(forward_hook)
+        self.target_layer.register_full_backward_hook(backward_hook)
 
-#     # 3. PID → sample index 매핑
-#     train_idx = np.where(np.isin(pids, train_pids))[0]
-#     val_idx   = np.where(np.isin(pids, val_pids))[0]
-#     test_idx  = np.where(np.isin(pids, test_pids))[0]
+    def generate(self, x1, x2=None):
+        """
+        x1: (1, C, H, W)
+        x2: (1, C, H, W) or None
+        returns: cam(H,W), prob(float), pred(int)
+        """
+        self.model.zero_grad(set_to_none=True)
 
-#     return (
-#         Subset(dataset, train_idx),
-#         Subset(dataset, val_idx),
-#         Subset(dataset, test_idx)
-#     )    
+        if x2 is None:
+            out = self.model(x1)
+        else:
+            out = self.model(x1, x2)
+
+        # BCE output_dim=1 가정 -> (B,1) 또는 (B,)
+        if out.ndim == 2 and out.size(1) == 1:
+            logit = out[:, 0]
+        else:
+            logit = out.view(-1)
+
+        prob = torch.sigmoid(logit)[0].item()
+        pred = int(prob >= 0.5)
+
+        logit.sum().backward()
+
+        # Grad-CAM
+        grads = self.gradients          # (1,C,h,w)
+        acts  = self.activations        # (1,C,h,w)
+
+        weights = grads.mean(dim=(2, 3), keepdim=True)   # (1,C,1,1)
+        cam = (weights * acts).sum(dim=1, keepdim=True)  # (1,1,h,w)
+        cam = F.relu(cam)
+
+        cam = F.interpolate(cam, size=x1.shape[2:], mode="bilinear", align_corners=False)
+        cam = cam[0, 0]
+        cam = cam - cam.min()
+        cam = cam / (cam.max() + 1e-8)
+
+        return cam.detach(), prob, pred
+
+# cam overlay
+def overlay_cam_on_gray(gray_img, cam, alpha=0.4):
+    """
+    gray_img: (H,W) uint8 or float
+    cam: (H,W) torch [0,1]
+    """
+    if gray_img.dtype != np.uint8:
+        g = (255 * (gray_img / (gray_img.max() + 1e-8))).astype(np.uint8)
+    else:
+        g = gray_img
+
+    cam_np = cam.detach().cpu().numpy()
+    heatmap = cv2.applyColorMap(np.uint8(255 * cam_np), cv2.COLORMAP_JET)
+
+    g3 = cv2.cvtColor(g, cv2.COLOR_GRAY2BGR)
+    overlay = cv2.addWeighted(heatmap, alpha, g3, 1 - alpha, 0)
+    return overlay 
     
     
 # EarlSyStopping
@@ -151,6 +185,7 @@ def wandb_init(args, cfg):
         name=name,
         
         config={
+            # Exp Settings
             "learning_rate": exp_settings.learning_rate,
             "batch_size": exp_settings.batch_size,
             "num_epochs": exp_settings.num_epochs,
@@ -159,15 +194,76 @@ def wandb_init(args, cfg):
             "ealry_stopping_patience": exp_settings.ealry_stopping_patience,
             "min_delta": exp_settings.min_delta,
             
-            "pretrained_model_path": pretrained_model_path,
+            # Model Settings
+            "output_dim": model_settings.output_dim,
+            "dropout": model_settings.dropout,
+            "train_enc_head": args.train_enc_head,
             
+            # File path
+            "pretrained_model_path": pretrained_model_path,
             "train_csv_file": datasets_settings.train_csv_file,
             "valid_csv_file": datasets_settings.valid_csv_file,
             "test_csv_file": datasets_settings.test_csv_file,
-            
+
+            # Transform info            
             "image_size": transform_settings.image_size,
-            "model_save_mode": model_save_mode
+            
+            # Model Saving Func
+            "model_save_mode": model_save_mode,
+            
+            # ETC
+            "etc": args.etc
         },
     )
     
     return wandb_run
+
+
+def manage_args(mode='train'):
+    from argparse import ArgumentParser
+    
+    parser = ArgumentParser(description="A simple command-line tool.")
+    parser.add_argument("--cfg_path", default="./config.json", type=str, help="Data and Model hyperparameter Config JSON File Path.")
+    parser.add_argument("--task", choices=["downstream_task1", "downstream_task2", "downstream_task3"], default="downstream_task1", help="Task to perform: upstream or downstream.")
+    parser.add_argument("--pretrained_model", default="only_state_dict.pth.tar", help="pretrained_model.")
+    
+    parser.add_argument("--argument_dir", default=None, help="Using Argument Data (Using: --argument_data 'paired_data')")
+
+    parser.add_argument("--seed", default=42, type=int, help="Random seed for reproducibility.")
+
+    # Overwrite to use colab
+    parser.add_argument("--data_root_path", default=None, type=str, help="Override data root path in config.")
+    
+    
+    # Overwirte to Exp hyperparameter
+    parser.add_argument("--learning_rate", default=None, type=float, help="Override learning rate in config.")
+    parser.add_argument("--weight_decay", default=None, type=float, help="Override weight decay in config.")
+    parser.add_argument("--batch_size", default=None, type=int, help="Override batch size in config.")
+    parser.add_argument("--num_epochs", default=None, type=int, help="Override number of epochs in config.")
+    parser.add_argument("--early_stopping_patience", default=None, type=int, help="Override early stopping patience in config.")
+    
+    # Overwirte to Model hyperparameter
+    parser.add_argument("--train_enc_head", action="store_true", help="Freezing Encoder Head(If turn on: Train Enc)")
+    
+    
+    # 실험이 안정적이여서 모델 저장할 때 사용
+    parser.add_argument("--save_model", action="store_true", help="Saving the model(Using: --save_model).")
+    parser.add_argument("--wandb", action="store_true", help="Using wandb logging(Using: --wandb).")    
+    
+    
+    # 기타로 뭔가 내용 적고 싶을 때
+    parser.add_argument("--etc", default=None, type=str, help="Note Something")
+    
+    
+    if mode=='test':
+        # Test
+        parser.add_argument("--best_model", default=None, required=True, type=str, help="best model checkpoint name for testing. (Using: model.pth)")
+        parser.add_argument("--only_inference", action="store_true", help="Only inference Not save test result")
+        
+        # Reverse X1, X2 path
+        # 바뀐 인풋에 대해서 아웃풋이 반대로 나오는지 확인하기 위함
+        parser.add_argument("--reverse", action="store_true", help='Change X1, X2 Path for check time effect')
+        
+    
+    
+    return parser
