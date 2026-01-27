@@ -179,7 +179,7 @@ def manage_args(mode='train'):
     parser.add_argument("--early_stopping_patience", default=None, type=int, help="Override early stopping patience in config.")
     
     # Overwirte to Model hyperparameter
-    parser.add_argument("--train_enc_head", action="store_true", help="Freezing Encoder Head(If turn on: Train Enc)")
+    parser.add_argument("--freeze_enc_head", action="store_true", help="Freezing Encoder Head(If turn on: Train Enc)")
     
     
     # 실험이 안정적이여서 모델 저장할 때 사용

@@ -31,16 +31,16 @@ def stack_inference(results, all_outputs):
     else:
         pid_list = list(pids)
         
-    for i in range(len(preds[0])):
+    for i in range(len(preds)):
         results.append({
-            "PID": int(pid_list[0][i]),
-            "pred": float(preds[0][i].item()),
-            "label": int(y_list[0][i]),
-            "confidence": float(confs[0][i].item()),
-            "pf_ratio1": float(pf_r1[0][i].item()),
-            "pf_ratio2": float(pf_r2[0][i].item()),
-            "cxr path1": path1[0][i],
-            "cxr path2": path2[0][i],
+            "PID": int(pid_list[i]),
+            "pred": float(preds[i].item()),
+            "label": int(y_list[i]),
+            "confidence": float(confs[i].item()),
+            "pf_ratio1": float(pf_r1[i].item()),
+            "pf_ratio2": float(pf_r2[i].item()),
+            "cxr path1": path1[i],
+            "cxr path2": path2[i],
         })
         
     return results
@@ -147,15 +147,15 @@ def test():
             all_ys.append(y.detach().cpu().view(-1))
             
             for k in data.keys():
-                if k == 'pid': all_outputs[k].append(pid)
-                if k == 'y': all_outputs[k].append(y)
-                if k == 'pf_r1': all_outputs[k].append(pf_r1)
-                if k == 'cxr_path1': all_outputs[k].append(cxr_path1)
-                if k == 'pf_r2': all_outputs[k].append(pf_r2)                
-                if k == 'cxr_path2': all_outputs[k].append(cxr_path2)
+                if k == 'pid': all_outputs[k].extend(pid)
+                if k == 'y': all_outputs[k].extend(y)
+                if k == 'pf_r1': all_outputs[k].extend(pf_r1)
+                if k == 'cxr_path1': all_outputs[k].extend(cxr_path1)
+                if k == 'pf_r2': all_outputs[k].extend(pf_r2)                
+                if k == 'cxr_path2': all_outputs[k].extend(cxr_path2)
                 
-            all_outputs['preds'].append(preds)
-            all_outputs['confs'].append(conf)
+            all_outputs['preds'].extend(preds)
+            all_outputs['confs'].extend(conf)
                 
             
             results = stack_inference(results, all_outputs)
