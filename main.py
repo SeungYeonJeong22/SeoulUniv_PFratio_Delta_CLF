@@ -86,7 +86,9 @@ def main():
         lr=cfg.exp_settings.learning_rate,
         weight_decay=cfg.exp_settings.weight_decay
     )
-    criterion = torch.nn.BCEWithLogitsLoss()
+    
+    if cfg.model.output_dim == 1: criterion = torch.nn.BCEWithLogitsLoss()
+    else: criterion = torch.nn.CrossEntropyLoss()
 
     # Train
     train(args, cfg, wandb_run, dataloader, model, optimizer, criterion, device)

@@ -2,6 +2,7 @@ import os
 import torch
 from tqdm import tqdm
 import pandas as pd
+from collections import defaultdict
 
 from utils.utils import *
 from utils.measure import evaluate_model
@@ -13,26 +14,33 @@ from torch.utils.data import DataLoader
 from monai.data import pad_list_data_collate
 from models.model import DownStreamTaskModel
 
-def stack_inference(results, pid, conf, preds, y, path1, path2):
+def stack_inference(results, all_outputs):
+    pids, confs, preds, y, pf_r1, path1, pf_r2, path2 = (        
+        all_outputs['pid'], all_outputs['confs'], all_outputs['preds'], all_outputs['y'], \
+            all_outputs['pf_r1'], all_outputs['cxr_path1'], all_outputs['pf_r2'], all_outputs['cxr_path2']
+    )
+    
     if torch.is_tensor(y):
         y_list = y.detach().cpu().view(-1).tolist()
     else:
         y_list = list(y)
 
     # pid/idx도 tensor일 수 있으니 정리
-    if torch.is_tensor(pid):
-        pid_list = pid.detach().cpu().view(-1).tolist()
+    if torch.is_tensor(pids):
+        pid_list = pids.detach().cpu().view(-1).tolist()
     else:
-        pid_list = list(pid)
-
-    for i in range(len(preds)):
+        pid_list = list(pids)
+        
+    for i in range(len(preds[0])):
         results.append({
-            "PID": int(pid_list[i]),
-            "pred": float(preds[i].item()),
-            "label": int(y_list[i]),
-            "confidence": float(conf[i].item()),
-            "cxr path1": path1[i],
-            "cxr path2": path2[i],
+            "PID": int(pid_list[0][i]),
+            "pred": float(preds[0][i].item()),
+            "label": int(y_list[0][i]),
+            "confidence": float(confs[0][i].item()),
+            "pf_ratio1": float(pf_r1[0][i].item()),
+            "pf_ratio2": float(pf_r2[0][i].item()),
+            "cxr path1": path1[0][i],
+            "cxr path2": path2[0][i],
         })
         
     return results
@@ -44,7 +52,7 @@ def load_checkpoint(model, ckpt_path: str, device="cpu", strict: bool = True):
     if not os.path.exists(ckpt_path):
         raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
 
-    state = torch.load(ckpt_path, map_location=device)
+    state = torch.load(ckpt_path, map_location=device, weights_only=False)
 
     if isinstance(state, dict) and "state_dict" in state:
         state = state["state_dict"]
@@ -107,36 +115,55 @@ def test():
     model.to(device)
     model.eval()
 
-    all_outputs = []
-    all_targets = []
-
+    all_probs = []
+    all_ys = []
+    all_outputs = defaultdict(list)
+    
     results = []
     with torch.no_grad():
         for data in tqdm(dataloader["test"], desc="Testing"):
             x1 = data["x1"].to(device)
             x2 = data["x2"].to(device)
-            target  = data["y"]            # cpu여도 됨
+            y  = data["y"]            # cpu여도 됨
             pid = data["pid"]
-            path1 = data["cxr_path1"]
-            path2 = data["cxr_path2"]
+            cxr_path1 = data["cxr_path1"]
+            cxr_path2 = data["cxr_path2"]
+            pf_r1 = data["pf_r1"]
+            pf_r2 = data["pf_r2"]
             
             out = model(x1, x2)
-            logits = out.squeeze(1)
-
-            probs = torch.sigmoid(logits).detach().cpu().view(-1)
+            if cfg.model.output_dim == 1:
+                logits = out.squeeze(1)
+                probs = torch.sigmoid(logits)  # (B,)
+            else:
+                logits = out
+                probs = torch.softmax(logits, dim=1)[:, 1] # (B,)                
+                
             preds = (probs >= 0.5).long() 
             
-            conf = torch.where(preds == 1, probs, 1 - probs)
+            conf = torch.where(preds == 1, probs, 1 - probs) 
             
-            all_outputs.append(probs)
-            all_targets.append(target.detach().cpu().view(-1))
+            all_probs.append(probs.detach().cpu().view(-1))
+            all_ys.append(y.detach().cpu().view(-1))
             
-            results = stack_inference(results, pid, conf, preds, target, path1, path2)
+            for k in data.keys():
+                if k == 'pid': all_outputs[k].append(pid)
+                if k == 'y': all_outputs[k].append(y)
+                if k == 'pf_r1': all_outputs[k].append(pf_r1)
+                if k == 'cxr_path1': all_outputs[k].append(cxr_path1)
+                if k == 'pf_r2': all_outputs[k].append(pf_r2)                
+                if k == 'cxr_path2': all_outputs[k].append(cxr_path2)
+                
+            all_outputs['preds'].append(preds)
+            all_outputs['confs'].append(conf)
+                
+            
+            results = stack_inference(results, all_outputs)
 
-    all_outputs = torch.cat(all_outputs, dim=0)
-    all_targets = torch.cat(all_targets, dim=0)
+    all_probs = torch.cat(all_probs, dim=0)
+    all_ys = torch.cat(all_ys, dim=0)
 
-    roc_auc, accuracy, f1, sensitivity, specificity, best_threshold = evaluate_model(all_outputs, all_targets)
+    roc_auc, accuracy, f1, sensitivity, specificity, best_threshold = evaluate_model(all_probs, all_ys)
     print(f"ROC AUC: {roc_auc:.4f}, Accuracy: {accuracy:.4f}, Sensitivity: {sensitivity:.4f}, "
             f"Specificity: {specificity:.4f}, F1: {f1:.4f}, Best_TH: {best_threshold:.2f}")
 
@@ -169,6 +196,7 @@ def test():
         inference_nm = os.path.join("./res", args.task, "R_" + args.best_model.replace(".pth", ".csv"))
     else:
         inference_nm = os.path.join("./res", args.task, args.best_model.replace(".pth", ".csv"))
+    
     pd.DataFrame(results).to_csv(inference_nm, index=False)    
         
                 

@@ -3,14 +3,11 @@ import random
 import numpy as np
 import json
 from types import SimpleNamespace
-import cv2
 
 import torch
 # from torch.utils.data import Subset
 # from sklearn.model_selection import train_test_split
 
-import torch
-import torch.nn.functional as F
 
 
 from dotenv import load_dotenv
@@ -40,7 +37,22 @@ def dict_to_namespace(d):
     else:
         return d    
     
-
+def namespace_to_dict(obj):
+    if isinstance(obj, SimpleNamespace):
+        return {
+            k: namespace_to_dict(v)
+            for k, v in vars(obj).items()
+        }
+    elif isinstance(obj, dict):
+        return {
+            k: namespace_to_dict(v)
+            for k, v in obj.items()
+        }
+    elif isinstance(obj, list):
+        return [namespace_to_dict(x) for x in obj]
+    else:
+        return obj
+    
 # load config
 def load_cfg(cfg_path: str):
     with open(cfg_path, "r") as f:
@@ -70,82 +82,6 @@ def get_time():
     return now
 
 
-class GradCAM:
-    def __init__(self, model, target_layer):
-        self.model = model
-        self.target_layer = target_layer
-        self.activations = None
-        self.gradients = None
-        self._register_hooks()
-
-    def _register_hooks(self):
-        def forward_hook(module, input, output):
-            self.activations = output  # detach 하지 말기
-
-        def backward_hook(module, grad_in, grad_out):
-            self.gradients = grad_out[0]
-
-        self.target_layer.register_forward_hook(forward_hook)
-        self.target_layer.register_full_backward_hook(backward_hook)
-
-    def generate(self, x1, x2=None):
-        """
-        x1: (1, C, H, W)
-        x2: (1, C, H, W) or None
-        returns: cam(H,W), prob(float), pred(int)
-        """
-        self.model.zero_grad(set_to_none=True)
-
-        if x2 is None:
-            out = self.model(x1)
-        else:
-            out = self.model(x1, x2)
-
-        # BCE output_dim=1 가정 -> (B,1) 또는 (B,)
-        if out.ndim == 2 and out.size(1) == 1:
-            logit = out[:, 0]
-        else:
-            logit = out.view(-1)
-
-        prob = torch.sigmoid(logit)[0].item()
-        pred = int(prob >= 0.5)
-
-        logit.sum().backward()
-
-        # Grad-CAM
-        grads = self.gradients          # (1,C,h,w)
-        acts  = self.activations        # (1,C,h,w)
-
-        weights = grads.mean(dim=(2, 3), keepdim=True)   # (1,C,1,1)
-        cam = (weights * acts).sum(dim=1, keepdim=True)  # (1,1,h,w)
-        cam = F.relu(cam)
-
-        cam = F.interpolate(cam, size=x1.shape[2:], mode="bilinear", align_corners=False)
-        cam = cam[0, 0]
-        cam = cam - cam.min()
-        cam = cam / (cam.max() + 1e-8)
-
-        return cam.detach(), prob, pred
-
-# cam overlay
-def overlay_cam_on_gray(gray_img, cam, alpha=0.4):
-    """
-    gray_img: (H,W) uint8 or float
-    cam: (H,W) torch [0,1]
-    """
-    if gray_img.dtype != np.uint8:
-        g = (255 * (gray_img / (gray_img.max() + 1e-8))).astype(np.uint8)
-    else:
-        g = gray_img
-
-    cam_np = cam.detach().cpu().numpy()
-    heatmap = cv2.applyColorMap(np.uint8(255 * cam_np), cv2.COLORMAP_JET)
-
-    g3 = cv2.cvtColor(g, cv2.COLOR_GRAY2BGR)
-    overlay = cv2.addWeighted(heatmap, alpha, g3, 1 - alpha, 0)
-    return overlay 
-    
-    
 # EarlSyStopping
 class EarlyStopping:
     def __init__(self, patience=10, min_delta=1e-5):
@@ -154,7 +90,7 @@ class EarlyStopping:
         self.best = float("inf")
         self.counter = 0
 
-    def step(self, val_loss: float, patience) -> bool:
+    def step(self, val_loss: float, patience: int) -> bool:
         # if return True stop
         if val_loss < self.best - self.min_delta:
             self.best = val_loss

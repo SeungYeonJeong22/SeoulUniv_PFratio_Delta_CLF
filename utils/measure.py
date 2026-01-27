@@ -10,11 +10,12 @@ def evaluate_model(probs, targets):
 
     targets = targets.astype(int)
     
-        # 유든 인덱스 사용
+    # 유든 인덱스 사용
     fpr, tpr, thresholds = roc_curve(targets, probs)
     youden_index = tpr - fpr
     best_idx = np.argmax(youden_index)
     best_threshold = thresholds[best_idx]
+    best_threshold = np.clip(best_threshold, 0.0, 1.0) # infinite 방지
     
     preds = (probs >= best_threshold).astype(int)
         

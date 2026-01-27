@@ -36,10 +36,13 @@ class PFRatioDataset(Dataset):
 
         x1 = cv2.imread(row["CXR PATH1"], cv2.IMREAD_GRAYSCALE)
         x2 = cv2.imread(row["CXR PATH2"], cv2.IMREAD_GRAYSCALE)
-
+        
         y = torch.tensor(row["SIMPLE LABEL"], dtype=torch.float32) 
         
         pid = row["PID"]
+        pf_r1 = row['P/F ratio1']
+        pf_r2 = row['P/F ratio2']
+        
         cxr_path1 = row['CXR PATH1']
         cxr_path2 = row['CXR PATH2']
 
@@ -52,6 +55,8 @@ class PFRatioDataset(Dataset):
             "x2": x2,
             "y": y,
             "pid": pid,
+            "pf_r1" : pf_r1,
+            "pf_r2" : pf_r2,
             "cxr_path1": cxr_path1,
             "cxr_path2": cxr_path2
         }

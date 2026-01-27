@@ -28,6 +28,8 @@ def train(args, cfg, wandb_run, dataloader, model, optimizer, criterion, device=
     # exp settings
     num_epochs = cfg.exp_settings.num_epochs
     best_val_loss = float('inf')
+    best_roc_auc = -1
+    best_epoch = -1
 
 
     # train & valid loop
@@ -41,9 +43,14 @@ def train(args, cfg, wandb_run, dataloader, model, optimizer, criterion, device=
             
             optimizer.zero_grad()
             out = model(x1, x2)
-            logits = out.squeeze(1)
+                        
+            if cfg.model.output_dim == 1:
+                logits = out.squeeze(1)
+                loss = criterion(logits, target.float())
+            else:
+                logits = out
+                loss = criterion(logits, target.long())
             
-            loss = criterion(logits, target)
             loss.backward()
             optimizer.step()
             
@@ -61,21 +68,31 @@ def train(args, cfg, wandb_run, dataloader, model, optimizer, criterion, device=
         val_count = 0
 
         all_outputs = []
-        all_targets = []        
+        all_targets = []
+        
+        best_youden = -float('inf')
+        best_info = {}
+        
         with torch.no_grad():
             for data in tqdm(dataloader['val'], desc=f"Epoch {epoch+1}/{num_epochs} Validation"):
                 x1, x2, target = data["x1"].to(device), data["x2"].to(device), data["y"].to(device)
 
                 out = model(x1, x2)
-                logits = out.squeeze(1)
-                val_loss = criterion(logits, target)
+                                
+                if cfg.model.output_dim == 1:
+                    logits = out.squeeze(1)
+                    val_loss = criterion(logits, target.float())
+                    probs = torch.sigmoid(logits)
+                else:
+                    logits = out
+                    val_loss = criterion(logits, target.long())
+                    probs = torch.softmax(logits, dim=1)[:, 1]
+                                    
                 
                 bs = target.size(0)
                 val_loss_sum += val_loss.item() * bs
                 val_count += bs
                 
-                probs = torch.sigmoid(logits)
-
                 all_outputs.append(probs)
                 all_targets.append(target)
                 
@@ -89,14 +106,39 @@ def train(args, cfg, wandb_run, dataloader, model, optimizer, criterion, device=
         print(f"Validation Loss: {val_loss:.4f}")
         print(f"ROC AUC: {roc_auc:.4f}, Accuracy: {accuracy:.4f}, F1: {f1:.4f}, "
               f"Sensitivity: {sensitivity:.4f}, Specificity: {specificity:.4f}, Best_TH: {best_threshold:.2f}")
-
+        
+        # youden: TPR - FPR이 최대가 되는 점 (즉, 하나의 th에서 sensitivity와 specificity의 균형이 얼마나 좋은지 보는 지표)
+        youden = sensitivity + specificity - 1
+        
         # Save best
-        if val_loss < best_val_loss:
+        if val_loss < best_val_loss - min_delta and roc_auc > best_roc_auc:
             best_val_loss = val_loss
+            best_roc_auc = roc_auc
+            best_youden = max(best_youden, youden)
+            best_epoch = epoch + 1
+            best_info = {
+                "epoch": best_epoch,
+                "val_loss": float(val_loss),
+                "roc_auc": float(roc_auc),
+                "accuracy": float(accuracy),
+                "f1": float(f1),
+                "sensitivity": float(sensitivity),
+                "specificity": float(specificity),
+                "youden": float(youden),
+                "best_threshold": float(best_threshold),
+            }            
             
             if getattr(args, "save_model", False):
                 print()
-                torch.save(model.state_dict(), save_path)
+                ckpt = {
+                    "state_dict": model.state_dict(),
+                    "epoch": best_epoch,
+                    "metrics": best_info,
+                    "args": vars(args),
+                    "cfg" : namespace_to_dict(cfg)
+                    
+                }
+                torch.save(ckpt, save_path)
                 print("Best model saved.")
         
         if early_stopper.step(val_loss, patience):
@@ -113,6 +155,7 @@ def train(args, cfg, wandb_run, dataloader, model, optimizer, criterion, device=
                 "F1 Score": f1,
                 "Sensitivity": sensitivity,
                 "Specificity": specificity,
+                "Youden": youden,
                 "Best_Threshhold": best_threshold
             })
         
