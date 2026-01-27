@@ -35,7 +35,6 @@ def train(args, cfg, wandb_run, dataloader, model, optimizer, criterion, device=
     # train & valid loop
     for epoch in range(num_epochs):
         model.train()
-        model.enc.eval()
         train_loss_sum = 0.0
         train_count = 0
         for data in tqdm(dataloader['train'], desc=f"Epoch {epoch+1}/{num_epochs} Training"):
@@ -111,9 +110,8 @@ def train(args, cfg, wandb_run, dataloader, model, optimizer, criterion, device=
         youden = sensitivity + specificity - 1
         
         # Save best
-        if val_loss < best_val_loss - min_delta and roc_auc > best_roc_auc:
+        if val_loss < best_val_loss - min_delta:
             best_val_loss = val_loss
-            best_roc_auc = roc_auc
             best_youden = max(best_youden, youden)
             best_epoch = epoch + 1
             best_info = {
