@@ -8,6 +8,7 @@ import os
 class PFRatioDataset(Dataset):
     def __init__(self, cfg, reverse=False, flag="train", transform=None):
         if flag == "train":
+            # df_path = os.path.join(cfg.data_root_path, "orig", cfg.dataset.train_csv_file)
             df_path = os.path.join(cfg.data_root_path, cfg.dataset.train_csv_file)
         elif flag == "valid":
             df_path = os.path.join(cfg.data_root_path, cfg.dataset.valid_csv_file)
@@ -20,6 +21,10 @@ class PFRatioDataset(Dataset):
         # 원본에서는 CXR PATH가 바론 ./data_png인데, 현재 디렉토리 구조간 ./data/data_png, ./data/metadata로 구성돼있어서 필요하면 사용
         self.df['CXR PATH1'] = self.df['CXR PATH1'].apply(lambda x: x.replace("./data_png", img_dirs))
         self.df['CXR PATH2'] = self.df['CXR PATH2'].apply(lambda x: x.replace("./data_png", img_dirs))
+        
+        # 임시 (성능 재현 확인용)
+        if "orig" in df_path:
+            self.df["SIMPLE LABEL"] = self.df['SIMPLE LABEL'].apply(lambda x: 1 if x==2 else 0)
         
         if reverse:
             swap = self.df['CXR PATH1']

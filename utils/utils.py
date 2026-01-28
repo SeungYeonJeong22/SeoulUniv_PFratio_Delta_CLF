@@ -133,7 +133,7 @@ def wandb_init(args, cfg):
             # Model Settings
             "output_dim": model_settings.output_dim,
             "dropout": model_settings.dropout,
-            "train_enc_head": args.train_enc_head,
+            "freeze_enc": args.freeze_enc,
             
             # File path
             "pretrained_model_path": pretrained_model_path,
@@ -179,7 +179,7 @@ def manage_args(mode='train'):
     parser.add_argument("--early_stopping_patience", default=None, type=int, help="Override early stopping patience in config.")
     
     # Overwirte to Model hyperparameter
-    parser.add_argument("--freeze_enc_head", action="store_true", help="Freezing Encoder Head(If turn on: Train Enc)")
+    parser.add_argument("--freeze_enc", action="store_true", help="Freezing Encoder Head(If turn on: Train Enc)")
     
     
     # 실험이 안정적이여서 모델 저장할 때 사용
