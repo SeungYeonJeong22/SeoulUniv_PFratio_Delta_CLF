@@ -158,14 +158,14 @@ def test():
             all_outputs['confs'].extend(conf)
                 
             
-            results = stack_inference(results, all_outputs)
+        results = stack_inference(results, all_outputs)
 
     all_probs = torch.cat(all_probs, dim=0)
     all_ys = torch.cat(all_ys, dim=0)
 
     roc_auc, accuracy, f1, sensitivity, specificity, best_threshold = evaluate_model(all_probs, all_ys)
-    print(f"ROC AUC: {roc_auc:.4f}, Accuracy: {accuracy:.4f}, Sensitivity: {sensitivity:.4f}, "
-            f"Specificity: {specificity:.4f}, F1: {f1:.4f}, Best_TH: {best_threshold:.2f}")
+    print(f"ROC AUC: {roc_auc:.3f}, Accuracy: {accuracy:.3f}, Sensitivity: {sensitivity:.3f}, "
+            f"Specificity: {specificity:.3f}, F1: {f1:.3f}, Best_TH: {best_threshold:.2f}")
 
     # csv 저장
     # cols = ['best_model','roc_auc','accuracy','f1','sensitivity','specificity']
@@ -187,7 +187,7 @@ def test():
             
         # 이후 결과 추가 저장
         pd.DataFrame(
-            [[args.best_model, f"{roc_auc:.4f}", f"{accuracy:.4f}", f"{sensitivity:.4f}", f"{specificity:.4f}", f"{f1:.4f}", f"Best_TH: {best_threshold:.2f}", f"{args.etc}"]],
+            [[args.best_model, f"{roc_auc:.3f}", f"{accuracy:.3f}", f"{sensitivity:.3f}", f"{specificity:.3f}", f"{f1:.3f}", f"Best_TH: {best_threshold:.2f}", f"{args.etc}"]],
             columns=['best_model','roc_auc','accuracy','sensitivity','specificity','f1', 'best_thershhold', 'etc']
         ).to_csv(save_test_res_path, mode='a', header=False, index=False)
         

@@ -1,55 +1,77 @@
-
-import numpy as np
-import cv2
-
 import torch
 import torch.nn.functional as F
-
+import cv2
+import numpy as np
 
 class GradCAM:
-    def __init__(self, model, target_layer):
+    def __init__(self, model, target_layer1, target_layer2):
         self.model = model
-        self.target_layer = target_layer
+        self.t1 = target_layer1
+        self.t2 = target_layer2
 
-        self.activations = []  # -> x1, x2를 따로 보기 위해서 리스트로 저장
-        self.gradients = []  # -> x1, x2를 따로 보기 위해서 리스트로 저장
-
+        self.acts = {"x1": None, "x2": None}
+        self.grads = {"x1": None, "x2": None}
         self._register_hooks()
 
     def _register_hooks(self):
-        def forward_hook(module, input, output):
-            self.activations.append(output)
+        def fwd_x1(m, i, o): self.acts["x1"] = o
+        def bwd_x1(m, gi, go): self.grads["x1"] = go[0]
+        def fwd_x2(m, i, o): self.acts["x2"] = o
+        def bwd_x2(m, gi, go): self.grads["x2"] = go[0]
 
-        def backward_hook(module, grad_in, grad_out):
-            self.gradients.append(grad_out[0])
+        self.t1.register_forward_hook(fwd_x1)
+        self.t1.register_full_backward_hook(bwd_x1)
+        self.t2.register_forward_hook(fwd_x2)
+        self.t2.register_full_backward_hook(bwd_x2)
 
-        self.target_layer.register_forward_hook(forward_hook)
-        self.target_layer.register_full_backward_hook(backward_hook)
+    def _make_cam(self, acts, grads, out_size):
+        # GAP over spatial dims -> channel weights
+        w = grads.mean(dim=(2, 3), keepdim=True)          # (B,C,1,1)
+        cam = (w * acts).sum(dim=1, keepdim=True)         # (B,1,H,W)
+        cam = F.relu(cam)
+        cam = F.interpolate(cam, size=out_size, mode="bilinear", align_corners=False)
+        cam = cam[:, 0]                                   # (B,H,W)
 
+        # normalize per-sample
+        b = cam.shape[0]
+        flat = cam.view(b, -1)
+        mn = flat.min(dim=1)[0].view(b, 1, 1)
+        mx = flat.max(dim=1)[0].view(b, 1, 1)
+        cam = (cam - mn) / (mx - mn + 1e-8)
+        return cam.detach()
 
+    @torch.enable_grad()
     def generate(self, x1, x2):
-        self.activations.clear()
-        self.gradients.clear()
-        self.model.zero_grad(set_to_none=True)
+        """
+        반환:
+          cam1: (H,W) [0,1]
+          cam2: (H,W) [0,1]
+          dcam: (H,W) [-1,1]  (cam2 - cam1 정규화)
+          prob, pred
+        """
+        self.model.eval()
 
-        out = self.model(x1, x2)
-        logit = out[:, 0]
-        prob = torch.sigmoid(logit)[0].item()
+        x1 = x1.requires_grad_(True)
+        x2 = x2.requires_grad_(True)
+
+        self.model.zero_grad(set_to_none=True)
+        self.acts["x1"]=self.acts["x2"]=None
+        self.grads["x1"]=self.grads["x2"]=None
+
+        out = self.model(x1, x2)       # (B,1)
+        logit = out[:, 0]              # (B,)
+        score = logit                  # 클래스 구분 없이 그냥 모델 score로 CAM
+
+        score.sum().backward()
+
+        cam1 = self._make_cam(self.acts["x1"], self.grads["x1"], out_size=x1.shape[2:])[0]
+        cam2 = self._make_cam(self.acts["x2"], self.grads["x2"], out_size=x2.shape[2:])[0]
+
+        prob = torch.sigmoid(logit.detach())[0].item()
         pred = int(prob >= 0.5)
 
-        logit.backward()
-
-        cams = []
-        for acts, grads in zip(self.activations, self.gradients):
-            weights = grads.mean(dim=(2, 3), keepdim=True)
-            cam = (weights * acts).sum(dim=1, keepdim=True)
-            cam = F.relu(cam)
-            cam = F.interpolate(cam, size=x1.shape[2:], mode="bilinear", align_corners=False)
-            cam = cam[0, 0]
-            cam = (cam - cam.min()) / (cam.max() + 1e-8)
-            cams.append(cam.detach())
-
-        return cams[0], cams[1], prob, pred
+        return cam1, cam2, prob, pred
+    
 
 # cam overlay
 def overlay_cam_on_gray(gray_img, cam, alpha=0.4):
@@ -68,5 +90,3 @@ def overlay_cam_on_gray(gray_img, cam, alpha=0.4):
     g3 = cv2.cvtColor(g, cv2.COLOR_GRAY2BGR)
     overlay = cv2.addWeighted(heatmap, alpha, g3, 1 - alpha, 0)
     return overlay 
-    
-    

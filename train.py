@@ -59,7 +59,7 @@ def train(args, cfg, wandb_run, dataloader, model, optimizer, criterion, device=
 
         train_loss = train_loss_sum / max(train_count, 1)
         print()
-        print(f"Epoch {epoch+1}/{num_epochs}, Train Loss: {train_loss:.4f}")
+        print(f"Epoch {epoch+1}/{num_epochs}, Train Loss: {train_loss:.3f}")
         
         # validation
         model.eval()
@@ -102,9 +102,9 @@ def train(args, cfg, wandb_run, dataloader, model, optimizer, criterion, device=
 
         roc_auc, accuracy, f1, sensitivity, specificity, best_threshold = evaluate_model(all_outputs, all_targets)
 
-        print(f"Validation Loss: {val_loss:.4f}")
-        print(f"ROC AUC: {roc_auc:.4f}, Accuracy: {accuracy:.4f}, F1: {f1:.4f}, "
-              f"Sensitivity: {sensitivity:.4f}, Specificity: {specificity:.4f}, Best_TH: {best_threshold:.2f}")
+        print(f"Validation Loss: {val_loss:.3f}")
+        print(f"ROC AUC: {roc_auc:.3f}, Accuracy: {accuracy:.3f}, F1: {f1:.3f}, "
+              f"Sensitivity: {sensitivity:.3f}, Specificity: {specificity:.3f}, Best_TH: {best_threshold:.2f}")
         
         # youden: TPR - FPR이 최대가 되는 점 (즉, 하나의 th에서 sensitivity와 specificity의 균형이 얼마나 좋은지 보는 지표)
         youden = sensitivity + specificity - 1
